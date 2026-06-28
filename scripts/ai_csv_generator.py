@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Adedamola. All rights reserved.
+# Description: Multi-Modality Clinical AI Triage Pipeline
+
 import csv
 import requests
 

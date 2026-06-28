@@ -1,32 +1,31 @@
-# End-to-End Clinical PACS Integration & AI Triage Pipeline
+# Multi-Modality Clinical AI Triage Pipeline & Safety Auditor
 
-## 📌 Project Overview
-This project demonstrates an end-to-end clinical data integration architecture designed to bridge the gap between hospital imaging repositories and frontline clinical software. 
+An interoperable, end-to-end medical imaging data orchestration pipeline that ingests DICOM studies from a local PACS server, dynamically routes cases across multi-modality AI models based on metadata evaluation, and acts as an automated clinical safety gatekeeper by auditing discrepancies against expert human ground truth.
 
-The pipeline programmatically queries a local Orthanc PACS server via a REST API, extracts study parameters while filtering out Protected Health Information (PHI) to maintain strict data governance, orchestrates an AI triage JSON payload, and formats the downstream data loop into an actionable, filtered "Red Alert" emergency workflow dashboard built for clinicians.
+## 🏗️ Architecture Overview
 
----
+The system establishes a robust middleware framework bridging clinical infrastructure, data governance, and analytics interfaces:
 
-## 🛠️ System Architecture
-
-
-
-The data orchestration moves seamlessly across the following architecture layers:
-1. **Imaging Infrastructure (PACS):** Local Orthanc instance simulating a standard clinical imaging archive managing DICOM studies.
-2. **Data Orchestration Layer (Python):** Custom script handles automated connection testing, REST endpoints interrogation, data anonymization, and diagnostic payload formatting.
-3. **Frontend Presentation Layer (Glide UX):** A responsive tracking board interface utilizing server-side data filters to isolate and elevate acute medical findings (`triage_status == URGENT`) directly to the clinical team's primary workspace.
+* **Infrastructure Layer:** An Orthanc PACS container serving local instances of multi-modality DICOM medical images.
+* **Data Orchestration Middleware (`ai_csv_generator.py`):** Navigates the complex DICOM data hierarchy down to the Study/Series level via RESTful API queries to extract data, strip sensitive PHI fields, and dynamically evaluate the `Modality` tag.
+* **AI Routing Engine:** Mimics multi-modality diagnostic tools by dynamically triaging cases (`CR`, `CT`, `MR`, `US`) into target streams, assigning specialized abnormality findings, and building a secure data payload (`clinical_triage_report.csv`).
+* **Clinical Safety Layer (`validate_ai.py`):** Audits real-time pipeline predictions against an expert human baseline. Calculates system accuracy, maps operational error rates, and generates critical clinical discrepancy warnings.
+* **Visualization Layer (Glide):** A live mobile/web tracking interface with data-driven conditional visibility rules that dynamically maps diagnostic findings and flags unaligned or missed high-risk diagnoses with stark warning badges.
 
 ---
 
-## 📂 Repository Structure
-* `/scripts/list_patients.py`: Diagnostic connectivity script verifying stable authentication pipelines with local PACS REST endpoints.
-* `/scripts/ai_triage.py`: Live-streaming simulation script that intercepts an isolated patient study event, filters PHI data blocks, and structures a real-time alert JSON contract payload.
-* `/scripts/ai_csv_generator.py`: Enterprise batch-processing script that programmatically interrogates the entire active PACS database repository length, loops through all available studies dynamically, and compiles them into a structured database file for frontend visualization.
-* `/data/clinical_triage_report.csv`: Live-sync clinical data schema generated automatically by backend loops to populate downstream clinician tracking interfaces.
+## 🛠️ Tech Stack & Protocols
+
+* **Medical Imaging Protocol:** DICOM (Digital Imaging and Communications in Medicine)
+* **PACS Node:** Orthanc server architecture
+* **Data Layer / Language:** Python 3 (Libraries: `pydicom`, `requests`, `numpy`, `csv`)
+* **Frontend Analytics:** Glide Engine (Low-Code Data Mapping & Cloud Synchronization)
 
 ---
 
-## 🚀 Technical Highlights & Core Competencies
-* **REST API Architecture:** Mastery of Python `requests` patterns to manage network authorization, process status code boundaries, and clean incoming raw responses.
-* **Clinical Data Governance:** Implemented strict proxy data handling by isolating `PatientID` attributes and intentionally omitting sensitive patient identity data flags to mimic healthcare privacy standards.
-* **Low-Code Integration & UX Design:** Architected an optimized user experience by mapping complex data contracts into clean UI card elements, building real-time data visual hierarchies (e.g., color-coded urgency tags) for emergency room operations.
+## 🚀 Deployment & Sandbox Execution
+
+### 1. Initialize & Populate the PACS Node
+Generate an explicit VR little endian multi-modality test batch containing distinct diagnostic imaging sequences (Chest X-Rays, Brain CT, Abdominal Ultrasound, Spine MRI) and upload them to the Orthanc instance:
+```bash
+python scripts/generate_test_dicoms.py
