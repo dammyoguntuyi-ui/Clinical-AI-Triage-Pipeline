@@ -1,0 +1,7 @@
+hospital_case_id,clinical_mrn,ai_model_used,finding_detected,confidence_score,triage_status,image_url
+073cef7d-a08dcb58,112516,ChestXray-Triage-v2,Normal Lung Scan,0.91,ROUTINE,https://upload.wikimedia.org/wikipedia/commons/a/a1/Normal_posteroanterior_chest_X-ray.jpg
+08657946-be35904a,COVID-19-AR-16439216,ChestXray-Triage-v2,Pneumothorax (Collapsed Lung),0.92,URGENT,https://upload.wikimedia.org/wikipedia/commons/a/a1/Normal_posteroanterior_chest_X-ray.jpg
+0ac2ccff-aece1045,A860258,ChestXray-Triage-v2,Normal Lung Scan,0.93,ROUTINE,https://upload.wikimedia.org/wikipedia/commons/a/a1/Normal_posteroanterior_chest_X-ray.jpg
+61aa57c1-2659949a,LIDC-IDRI-0580,ChestXray-Triage-v2,Pneumothorax (Collapsed Lung),0.94,URGENT,https://upload.wikimedia.org/wikipedia/commons/a/a1/Normal_posteroanterior_chest_X-ray.jpg
+6912a741-abd37559,AP-27ZN,ChestXray-Triage-v2,Normal Lung Scan,0.95,ROUTINE,https://upload.wikimedia.org/wikipedia/commons/a/a1/Normal_posteroanterior_chest_X-ray.jpg
+bff62c1e-a85744e2,LIDC-IDRI-0232,ChestXray-Triage-v2,Pneumothorax (Collapsed Lung),0.96,URGENT,https://upload.wikimedia.org/wikipedia/commons/a/a1/Normal_posteroanterior_chest_X-ray.jpg
