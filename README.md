@@ -19,10 +19,10 @@ The data orchestration moves seamlessly across the following architecture layers
 ---
 
 ## 📂 Repository Structure
-* `/scripts/list_patients.py`: Initial diagnostic script verifying stable authentication and integration with local PACS REST pipelines.
-* `/scripts/ai_triage.py`: Core logic file handling server queries, data-stripping rules, and JSON payload formatting.
-* `/scripts/ai_csv_generator.py`: Custom batch-processing script engineered to format diagnostic outputs into a standardized CSV schema, providing a free, local data-bridge alternative for downstream visualization.
-* `/data/clinical_triage_report.csv`: Sample clinical data export representing completed backend pipeline outcomes ready for application synchronization.
+* `/scripts/list_patients.py`: Diagnostic connectivity script verifying stable authentication pipelines with local PACS REST endpoints.
+* `/scripts/ai_triage.py`: Live-streaming simulation script that intercepts an isolated patient study event, filters PHI data blocks, and structures a real-time alert JSON contract payload.
+* `/scripts/ai_csv_generator.py`: Enterprise batch-processing script that programmatically interrogates the entire active PACS database repository length, loops through all available studies dynamically, and compiles them into a structured database file for frontend visualization.
+* `/data/clinical_triage_report.csv`: Live-sync clinical data schema generated automatically by backend loops to populate downstream clinician tracking interfaces.
 
 ---
 
