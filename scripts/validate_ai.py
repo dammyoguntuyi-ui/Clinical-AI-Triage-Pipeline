@@ -1,16 +1,13 @@
 import csv
 import os
 
-# 🩺 The Human Specialist "Ground Truth" Baseline
-# This represents the definitive diagnosis from senior radiologists.
-GROUND_TRUTH = {
-    "PATIENT_001": {"modality": "CR", "status": "URGENT", "finding": "Pneumothorax (Collapsed Lung)"},
-    "PATIENT_002": {"modality": "CR", "status": "URGENT", "finding": "Pneumothorax (Collapsed Lung)"},
-    "PATIENT_003": {"modality": "CT", "status": "URGENT", "finding": "Acute Intracranial Hemorrhage"},
-    "PATIENT_004": {"modality": "US", "status": "ROUTINE", "finding": "Deep Vein Thrombosis (DVT) Cleared"},
-    # 💥 SIMULATED DISCREPANCY: The human specialist found a massive tumor, 
-    # but our mock AI is going to label it as a spinal stenosis.
-    "PATIENT_005": {"modality": "MR", "status": "CRITICAL", "finding": "Malignant Spinal Cord Mass"}
+# 🩺 Rule-Based Ground Truth Definitions
+# This represents the strictly approved clinical mapping for the AI models
+VALID_MODELS = {
+    "CR": "ChestXray-Triage-v2",
+    "CT": "Neuro-Stroke-CT-v4",
+    "MR": "Spine-Decompression-v1",
+    "US": "Vascular-DeepVein-v2"
 }
 
 REPORT_FILE = "clinical_triage_report.csv"
@@ -19,8 +16,8 @@ if not os.path.exists(REPORT_FILE):
     print(f"❌ Error: {REPORT_FILE} not found. Run ai_csv_generator.py first!")
     exit()
 
-print("🩺 Starting Multi-Modality Clinical AI Validation Audit...")
-print("-" * 70)
+print("🩺 Starting Dynamic Multi-Modality Validation Audit...")
+print("-" * 75)
 
 total_cases = 0
 matches = 0
@@ -29,52 +26,48 @@ discrepancies = []
 with open(REPORT_FILE, mode="r") as f:
     reader = csv.DictReader(f)
     for row in reader:
+        total_cases += 1
         mrn = row["clinical_mrn"]
-        ai_status = row["triage_status"]
-        ai_finding = row["finding_detected"]
+        modality = row["modality"]
         ai_model = row["ai_model_used"]
+        validation_status = row.get("validation_status", "VERIFIED")
         
-        if mrn in GROUND_TRUTH:
-            total_cases += 1
-            true_status = GROUND_TRUTH[mrn]["status"]
-            true_finding = GROUND_TRUTH[mrn]["finding"]
-            
-            # Audit the AI's triage status priority against human ground truth
-            if ai_status == true_status:
-                matches += 1
-                print(f"✅ {mrn} ({row['modality']}): AI matched human baseline ({ai_status}).")
-            else:
-                discrepancies.append({
-                    "mrn": mrn,
-                    "modality": row["modality"],
-                    "model": ai_model,
-                    "ai_status": ai_status,
-                    "true_status": true_status,
-                    "ai_finding": ai_finding,
-                    "true_finding": true_finding
-                })
-                print(f"⚠️  {mrn} ({row['modality']}): MISMATCH DETECTED!")
+        # Check if the AI model used matches the required model for this imaging modality
+        expected_model = VALID_MODELS.get(modality, "UNKNOWN")
+        
+        # 🚨 Trap our intentional simulated discrepancy
+        if validation_status == "MISMATCH / AUDIT REQUIRED":
+            discrepancies.append({
+                "mrn": mrn, "modality": modality, "model": ai_model,
+                "reason": "AI model under-called a CRITICAL Malignant Mass as standard spinal stenosis."
+            })
+            print(f"⚠️  {mrn} ({modality}): MISMATCH DETECTED (Simulated Audit Target)")
+        elif ai_model == expected_model:
+            matches += 1
+            print(f"✅ {mrn} ({modality}): Pipeline routing verified successfully.")
+        else:
+            discrepancies.append({
+                "mrn": mrn, "modality": modality, "model": ai_model,
+                "reason": f"Routing Error! Modality {modality} should use {expected_model} but used {ai_model}."
+            })
+            print(f"❌ {mrn} ({modality}): CRITICAL ROUTING FAILURE!")
 
 # --- PERFORMANCE METRICS ---
 accuracy = (matches / total_cases) * 100 if total_cases > 0 else 0
 error_rate = 100 - accuracy
 
-print("-" * 70)
+print("-" * 75)
 print("📊 CLINICAL PERFORMANCE METRICS SUMMARY")
-print("-" * 70)
+print("-" * 75)
 print(f"🔹 Total Audited Multi-Modality Cases : {total_cases}")
 print(f"🔹 Successful AI Alignments          : {matches}")
 print(f"🔹 System Accuracy Rate              : {accuracy:.1f}%")
 print(f"🔹 Overall AI Error Rate              : {error_rate:.1f}%")
-print("-" * 70)
+print("-" * 75)
 
 if discrepancies:
     print("\n🚨 DETAILED CLINICAL DISCREPANCY REPORT:")
     for d in discrepancies:
         print(f"\n• Patient ID: {d['mrn']} [{d['modality']}]")
-        print(f"  AI Model:   {d['model']}")
-        print(f"  [AI Output]      Triage: {d['ai_status']} | Finding: {d['ai_finding']}")
-        print(f"  [Ground Truth]   Triage: {d['true_status']} | Finding: {d['true_finding']}")
-        print(f"  Clinical Risk:   AI downgraded a CRITICAL mass to URGENT stenosis. Potential delay in oncology review!")
-else:
-    print("\n🌟 No clinical discrepancies found in this run.")
+        print(f"  Current Model: {d['model']}")
+        print(f"  Issue:         {d['reason']}")

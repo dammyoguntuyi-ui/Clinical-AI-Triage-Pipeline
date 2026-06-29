@@ -1,6 +1,7 @@
 import os
 import datetime
 import numpy as np
+import random
 from pydicom.dataset import FileDataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, generate_uid
 
@@ -51,20 +52,42 @@ def create_dummy_dicom(filename, patient_id, patient_name, study_description, mo
     print(f"📦 Manufactured dynamic {modality} DICOM: {filename}")
 
 # --- EXECUTION LOOP ---
+import random  # 🌟 Added at the top of your execution block
+
+# --- RANDOM COHORT CONFIGURATION ---
 output_dir = "./test_images"
 os.makedirs(output_dir, exist_ok=True)
 
-test_cases = [
-    ("PATIENT_001", "John Doe", "Chest X-Ray Left PA", "CR"),
-    ("PATIENT_002", "Jane Smith", "Chest X-Ray Frontal PA", "CR"),
-    ("PATIENT_003", "Bob Jones", "Brain CT Brain Unenhanced", "CT"),
-    ("PATIENT_004", "Alice Brown", "Abdomen Ultrasound", "US"),
-    ("PATIENT_005", "Charlie Green", "Spine Lumbar MR", "MR")
-]
+# Pools of clinical dummy data
+first_names = ["John", "Jane", "Bob", "Alice", "Charlie", "David", "Eva", "Frank", "Grace", "Henry", "Amara", "Tariq"]
+last_names = ["Doe", "Smith", "Jones", "Brown", "Green", "Wright", "Martinez", "Miller", "Taylor", "Clark", "Okonkwo", "Al-Sayed"]
+modalities = ["CR", "CT", "MR", "US"]
 
-print("🚀 Re-starting bulk multi-modality generation...")
+modality_details = {
+    "CR": ["Chest X-Ray Left PA", "Chest X-Ray Lateral", "Hand X-Ray 3-Views"],
+    "CT": ["Brain CT Unenhanced", "Abdomen/Pelvis CT Contrast", "Chest CT High-Res"],
+    "MR": ["Spine Lumbar MR", "Brain MRI Stroke Protocol", "Knee MR Left Non-Contrast"],
+    "US": ["Abdomen Ultrasound", "Pelvis Ultrasound", "Carotid Doppler Ultrasound"]
+}
+
+# 🌟 CONFIGURE BATCH SIZE HERE: Change this number to generate 10, 50, or 100 patients instantly!
+batch_size = 10 
+test_cases = []
+
+print(f"🎲 Rolling dice to manufacture {batch_size} randomized clinical records...")
+
+for i in range(1, batch_size + 1):
+    p_id = f"PATIENT_{i:03d}"  # Generates PATIENT_001, PATIENT_002, etc.
+    p_name = f"{random.choice(last_names)}, {random.choice(first_names)}" # Random name mix
+    mod = random.choice(modalities) # Random modality selection
+    desc = random.choice(modality_details[mod]) # Selects matching description
+    
+    test_cases.append((p_id, p_name, desc, mod))
+
+# --- EXECUTION LOOP ---
+print("🚀 Manufacturing randomized multi-modality files...")
 for p_id, p_name, desc, mod in test_cases:
     file_path = os.path.join(output_dir, f"{p_id}.dcm")
     create_dummy_dicom(file_path, p_id, p_name, desc, mod)
 
-print(f"\n🎉 Success! 5 multi-modality files generated.")
+print(f"\n🎉 Success! {len(test_cases)} completely unique DICOM files generated.")
