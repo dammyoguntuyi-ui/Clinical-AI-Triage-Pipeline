@@ -32,29 +32,23 @@ python scripts/generate_test_dicoms.py
 
 Upload the freshly manufactured .dcm cohort folder into http://localhost:8042/app/explorer.html#upload.
 
----
-
 ### 2. Run the Data Orchestration Engine
+
 Extract metadata fields from the root PACS API, dynamically query the study level to parse modality attributes, and resolve routing schemas:
 
 ```bash
 python scripts/ai_csv_generator.py
 
----
-
 ### 3. Execute the Dynamic Clinical Safety Audit
+
 Intercept the output payload and evaluate system routing accuracy and discrepancy rates on the fly:
 
 ```bash
 python scripts/validate_ai.py
 
----
-
 ## 📊 Live Simulation Metrics & Edge-Case Trapping
 
 The safety framework is stress-tested using a dynamic validator that tracks performance across scaling workloads while successfully isolating targeted clinical blind spots (such as under-called critical spinal masses).
-
----
 
 ### Example Output Log (10-Patient Randomized Batch):
 
@@ -81,8 +75,6 @@ The safety framework is stress-tested using a dynamic validator that tracks perf
 • Patient ID: PATIENT_005 [MR]
   Current Model: Spine-Decompression-v1
   Issue:         AI model under-called a CRITICAL Malignant Mass as standard spinal stenosis.
-
----
 
 ## 🛡️ Intellectual Property, Governance & Compliance
 
