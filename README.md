@@ -27,6 +27,7 @@ The system establishes a robust middleware framework bridging clinical infrastru
 
 ### 1. Initialize & Populate the PACS Node (Randomized Simulation)
 Generate a completely randomized, scale-configurable test batch of explicit VR little endian DICOM files across multiple imaging sequences (Chest X-Rays, Brain CTs, Abdominal Ultrasounds, Spine MRIs) to simulate realistic variable hospital intake:
+
 ```bash
 python scripts/generate_test_dicoms.py
 
