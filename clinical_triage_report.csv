@@ -1,11 +1,11 @@
 hospital_case_id,clinical_mrn,modality,ai_model_used,finding_detected,confidence_score,triage_status,image_url,validation_status
-2fdc61b2-fdbafcb7,PATIENT_001,US,Vascular-DeepVein-v2,Deep Vein Thrombosis (DVT) Cleared,0.93,ROUTINE,https://upload.wikimedia.org/wikipedia/commons/2/23/DVT_Ultrasound.jpg,VERIFIED
-4db16b3b-c88a33e1,PATIENT_008,CT,Neuro-Stroke-CT-v4,Acute Intracranial Hemorrhage,0.94,URGENT,https://upload.wikimedia.org/wikipedia/commons/4/4b/CT_scan_of_brain_with_intracerebral_hemorrhage.jpg,VERIFIED
-5ec39ecd-f9c9fe9b,PATIENT_010,US,Vascular-DeepVein-v2,Deep Vein Thrombosis (DVT) Cleared,0.95,ROUTINE,https://upload.wikimedia.org/wikipedia/commons/2/23/DVT_Ultrasound.jpg,VERIFIED
+2fdc61b2-fdbafcb7,PATIENT_001,MR,Spine-Decompression-v1,Severe Spinal Canal Stenosis,0.93,URGENT,https://upload.wikimedia.org/wikipedia/commons/e/ee/Lumbar_spinal_stenosis_mri.jpg,VERIFIED
+4db16b3b-c88a33e1,PATIENT_008,CR,ChestXray-Triage-v2,Pneumothorax (Collapsed Lung),0.94,URGENT,https://upload.wikimedia.org/wikipedia/commons/a/a1/Normal_posteroanterior_chest_X-ray.jpg,VERIFIED
+5ec39ecd-f9c9fe9b,PATIENT_010,CT,Neuro-Stroke-CT-v4,Acute Intracranial Hemorrhage,0.95,URGENT,https://upload.wikimedia.org/wikipedia/commons/4/4b/CT_scan_of_brain_with_intracerebral_hemorrhage.jpg,VERIFIED
 89af8500-9cd22f4b,PATIENT_003,CT,Neuro-Stroke-CT-v4,Acute Intracranial Hemorrhage,0.96,URGENT,https://upload.wikimedia.org/wikipedia/commons/4/4b/CT_scan_of_brain_with_intracerebral_hemorrhage.jpg,VERIFIED
-8dd284cb-6fb813aa,PATIENT_006,US,Vascular-DeepVein-v2,Deep Vein Thrombosis (DVT) Cleared,0.97,ROUTINE,https://upload.wikimedia.org/wikipedia/commons/2/23/DVT_Ultrasound.jpg,VERIFIED
+8dd284cb-6fb813aa,PATIENT_006,MR,Spine-Decompression-v1,Severe Spinal Canal Stenosis,0.97,URGENT,https://upload.wikimedia.org/wikipedia/commons/e/ee/Lumbar_spinal_stenosis_mri.jpg,VERIFIED
 973aaffa-5ceaea77,PATIENT_007,CR,ChestXray-Triage-v2,Pneumothorax (Collapsed Lung),0.98,URGENT,https://upload.wikimedia.org/wikipedia/commons/a/a1/Normal_posteroanterior_chest_X-ray.jpg,VERIFIED
-9b542490-95313b48,PATIENT_005,CR,ChestXray-Triage-v2,Pneumothorax (Collapsed Lung),0.96,URGENT,https://upload.wikimedia.org/wikipedia/commons/a/a1/Normal_posteroanterior_chest_X-ray.jpg,MISMATCH / AUDIT REQUIRED
-d46f6be6-cdc48a16,PATIENT_009,CT,Neuro-Stroke-CT-v4,Acute Intracranial Hemorrhage,0.96,URGENT,https://upload.wikimedia.org/wikipedia/commons/4/4b/CT_scan_of_brain_with_intracerebral_hemorrhage.jpg,VERIFIED
+9b542490-95313b48,PATIENT_005,US,Vascular-DeepVein-v2,Deep Vein Thrombosis (DVT) Cleared,0.96,ROUTINE,https://upload.wikimedia.org/wikipedia/commons/2/23/DVT_Ultrasound.jpg,MISMATCH / AUDIT REQUIRED
+d46f6be6-cdc48a16,PATIENT_009,MR,Spine-Decompression-v1,Severe Spinal Canal Stenosis,0.96,URGENT,https://upload.wikimedia.org/wikipedia/commons/e/ee/Lumbar_spinal_stenosis_mri.jpg,VERIFIED
 d972b324-3240c1c3,PATIENT_002,CR,ChestXray-Triage-v2,Pneumothorax (Collapsed Lung),0.96,URGENT,https://upload.wikimedia.org/wikipedia/commons/a/a1/Normal_posteroanterior_chest_X-ray.jpg,VERIFIED
-db23ea80-e9b1658f,PATIENT_004,MR,Spine-Decompression-v1,Severe Spinal Canal Stenosis,0.96,URGENT,https://upload.wikimedia.org/wikipedia/commons/e/ee/Lumbar_spinal_stenosis_mri.jpg,VERIFIED
+db23ea80-e9b1658f,PATIENT_004,CT,Neuro-Stroke-CT-v4,Acute Intracranial Hemorrhage,0.96,URGENT,https://upload.wikimedia.org/wikipedia/commons/4/4b/CT_scan_of_brain_with_intracerebral_hemorrhage.jpg,VERIFIED
