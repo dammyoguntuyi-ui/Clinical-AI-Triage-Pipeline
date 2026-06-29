@@ -30,6 +30,7 @@ Generate a completely randomized, scale-configurable test batch of explicit VR l
 
 ```bash
 python scripts/generate_test_dicoms.py
+```
 
 Upload the freshly manufactured .dcm cohort folder into http://localhost:8042/app/explorer.html#upload.
 
@@ -39,6 +40,7 @@ Extract metadata fields from the root PACS API, dynamically query the study leve
 
 ```bash
 python scripts/ai_csv_generator.py
+```
 
 ### 3. Execute the Dynamic Clinical Safety Audit
 
@@ -46,6 +48,7 @@ Intercept the output payload and evaluate system routing accuracy and discrepanc
 
 ```bash
 python scripts/validate_ai.py
+```
 
 ## 📊 Live Simulation Metrics & Edge-Case Trapping
 
@@ -76,6 +79,7 @@ The safety framework is stress-tested using a dynamic validator that tracks perf
 • Patient ID: PATIENT_005 [MR]
   Current Model: Spine-Decompression-v1
   Issue:         AI model under-called a CRITICAL Malignant Mass as standard spinal stenosis.
+```
 
 ## 🛡️ Intellectual Property, Governance & Compliance
 
