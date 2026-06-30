@@ -1,3 +1,0 @@
-hospital_case_id,clinical_mrn,ai_model_used,finding_detected,confidence_score,triage_status
-073cef7d-a08dcb58,112516,ChestXray-Triage-v2,Pneumothorax (Collapsed Lung),0.94,URGENT
-08657946-be35904a,COVID-19-AR-16439216,ChestXray-Triage-v2,Normal Lung Scan,0.98,ROUTINE
