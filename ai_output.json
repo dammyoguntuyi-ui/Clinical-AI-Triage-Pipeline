@@ -1,8 +1,0 @@
-{
-    "hospital_case_id": "073cef7d-a08dcb58-537eea00-bd8c6ad7-7e01f85e",
-    "clinical_mrn": "112516",
-    "ai_model_used": "ChestXray-Triage-v2",
-    "finding_detected": "Pneumothorax (Collapsed Lung)",
-    "confidence_score": 0.94,
-    "triage_status": "URGENT"
-}
