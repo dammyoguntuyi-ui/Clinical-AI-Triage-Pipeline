@@ -2,6 +2,8 @@ import os
 import datetime
 import numpy as np
 import random
+import subprocess
+import requests
 from pydicom.dataset import FileDataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, generate_uid
 
@@ -85,9 +87,21 @@ for i in range(1, batch_size + 1):
     test_cases.append((p_id, p_name, desc, mod))
 
 # --- EXECUTION LOOP ---
-print("🚀 Manufacturing randomized multi-modality files...")
+print("🏭 Manufacturing randomized multi-modality files...")
 for p_id, p_name, desc, mod in test_cases:
     file_path = os.path.join(output_dir, f"{p_id}.dcm")
     create_dummy_dicom(file_path, p_id, p_name, desc, mod)
+    
+    # 🚀 NEW: Read the newly created local file and push it directly to Orthanc PACS
+    try:
+        with open(file_path, "rb") as dicom_file:
+            # Pushing the binary payload directly to Orthanc's native instance ingestion endpoint
+            response = requests.post("http://localhost:8042/instances", data=dicom_file.read())
+            if response.status_code == 200 or response.status_code == 201:
+                print(f"📡 Successfully uploaded {p_id} to Orthanc PACS.")
+            else:
+                print(f"⚠️ Orthanc rejected {p_id}. Status code: {response.status_code}")
+    except Exception as upload_err:
+        print(f"❌ Failed to connect or upload to Orthanc server: {upload_err}")
 
-print(f"\n🎉 Success! {len(test_cases)} completely unique DICOM files generated.")
+print("✨ Success! 10 completely unique DICOM files generated and uploaded.")

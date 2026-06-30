@@ -88,7 +88,7 @@ try:
         dynamic_data.append(case_entry)
 
     if dynamic_data:
-        with open("clinical_triage_report.csv", "w", newline="") as f:
+        with open("data/clinical_triage_report.csv", "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=dynamic_data[0].keys())
             writer.writeheader()
             writer.writerows(dynamic_data)

@@ -32,8 +32,8 @@ class DicomBatchHandler(FileSystemEventHandler):
         print("⚡ Executing automated data orchestration engine...")
         
         try:
-            # Execute your clinical triage report compilation script exactly once
-            subprocess.run(["python", "scripts/ai_csv_generator.py"], check=True)
+            # Runs from the root folder directory path context
+            subprocess.run(["python", "scripts/ai_csv_generator.py"], cwd=".")
             print("✅ Automated processing chain completed successfully.")
         except subprocess.CalledProcessError as e:
             print(f"❌ Automation Error during script execution: {e}")
