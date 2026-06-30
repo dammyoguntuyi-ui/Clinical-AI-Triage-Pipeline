@@ -12,6 +12,35 @@ The system establishes a robust middleware framework bridging clinical infrastru
 * **Clinical Safety Layer (`validate_ai.py`):** Audits real-time pipeline predictions using dynamic, rules-based validation. Calculates system accuracy, maps operational error rates, and isolates clinical discrepancy warnings across variable cohort sizes.
 * **Visualization Layer (Glide):** A live mobile/web tracking interface with data-driven conditional visibility rules that dynamically maps diagnostic findings and flags unaligned or missed high-risk diagnoses with stark warning badges.
 
+## ⚙️ Event-Driven Ingestion Engine (Watchdog Middleware)
+
+To transition this pipeline from a manual batch script into a real-time, production-ready healthcare sandbox, the system utilizes an asynchronous, event-driven architecture powered by a background filesystem listener (`scripts/watch_pacs.py`).
+
+### 🔄 Asynchronous Data Flow & Race Condition Mitigation
+
+In a live hospital environment, imaging modalities stream data streams sequentially. To replicate this safely without causing system chokes or cascading database writes, the middleware implements a **Thread-Locked Batch Accumulator Pattern**:
+
+1. **OS-Level Hooking:** The background listener binds directly to the absolute filesystem storage layer using the `watchdog` framework, trapping both file creation and modification loops natively.
+2. **Mutex Thread Locking (`threading.Lock`):** To prevent rapid-fire sequential DICOM file writes from spawning racing background processes, a persistent mutex lock isolates the core evaluation state.
+3. **Delayed Batch Accumulation:** Instead of executing the pipeline on every individual image alert, the handler sets a rolling countdown timer. Every subsequent write resets the window. The core orchestration engine (`ai_csv_generator.py`) is triggered **exactly once** only after the ingestion directory achieves a quiet window of silence.
+
+```text
+ 📥 Sequential DICOM Writes 
+ (PATIENT_001.dcm -> PATIENT_010.dcm)
+               │
+               ▼
+   [ 🕵️‍♂️ watch_pacs.py Active Listener ]
+               │
+      [ 🔒 Threading Lock ] ──► (Queues concurrent OS bursts)
+               │
+      [ ⏳ 5s Countdown Timer ] ◄── (Resets continuously on new activity)
+               │
+       (Ingestion Quiet Window Achieved)
+               │
+               ▼
+ [ 🚀 EXECUTE SINGLE BATCH RUN: ai_csv_generator.py ]
+```
+ 
 ---
 
 ## 🛠️ Tech Stack & Protocols
