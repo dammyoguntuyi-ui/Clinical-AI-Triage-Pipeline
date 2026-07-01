@@ -6,11 +6,10 @@ An interoperable, end-to-end medical imaging data orchestration pipeline that in
 
 The system establishes a robust middleware framework bridging clinical infrastructure, data governance, and analytics interfaces:
 
-* **Infrastructure Layer:** An Orthanc PACS container serving local instances of multi-modality DICOM medical images.
-* **Data Orchestration Middleware (`ai_csv_generator.py`):** Navigates the complex DICOM data hierarchy down to the Study/Series level via RESTful API queries to extract data, strip sensitive PHI fields, and dynamically evaluate the `Modality` tag.
-* **AI Routing Engine:** Mimics multi-modality diagnostic tools by dynamically triaging cases (`CR`, `CT`, `MR`, `US`) into target streams, assigning specialized abnormality findings, and building a secure data payload (`clinical_triage_report.csv`).
-* **Clinical Safety Layer (`validate_ai.py`):** Audits real-time pipeline predictions using dynamic, rules-based validation. Calculates system accuracy, maps operational error rates, and isolates clinical discrepancy warnings across variable cohort sizes.
-* **Visualization Layer (Glide):** A live mobile/web tracking interface with data-driven conditional visibility rules that dynamically maps diagnostic findings and flags unaligned or missed high-risk diagnoses with stark warning badges.
+* **Infrastructure Layer (`orthanc-pacs` container)**: A production-grade Orthanc PACS microservice serving multi-modality DICOM medical instances over containerized RESTful API endpoints.
+* **Data Orchestration Middleware (`triage-listener` container)**: An event-driven background daemon utilizing the `watchdog` framework to catch filesystem changes natively, strip sensitive PHI fields, and handle multi-modality AI routing schemas.
+* **Clinical Safety & Audit Layer**: Integrated rules-based validation filters that isolate discrepancies (such as the simulated `PATIENT_005` cross-reference validation conflict) directly into an elevated administrative review state.
+* **Visualization Layer (`triage-dashboard` container)**: A reactive frontend interface running on a continuous 5-second polling loop to hot-reload changing clinical queues, priority counters, and safety audit trails in real time.
 
 ## ⚙️ Event-Driven Ingestion Engine (Watchdog Middleware)
 
@@ -49,34 +48,38 @@ In a live hospital environment, imaging modalities stream data streams sequentia
 * **PACS Node:** Orthanc server architecture
 * **Data Layer / Language:** Python 3 (Libraries: `pydicom`, `requests`, `numpy`, `csv`, `random`)
 * **Frontend Analytics:** Glide Engine (Low-Code Data Mapping & Cloud Synchronization)
+* **Frontend Analytics**: Streamlit Engine (Containerized web application with live data polling)
+* **Containerization & Orchestration**: Docker, Docker Compose, Linux Virtualization Subsystem (WSL2)
 
 ---
 
 ## 🚀 Deployment & Sandbox Execution
 
-### 1. Initialize & Populate the PACS Node (Randomized Simulation)
-Generate a completely randomized, scale-configurable test batch of explicit VR little endian DICOM files across multiple imaging sequences (Chest X-Rays, Brain CTs, Abdominal Ultrasounds, Spine MRIs) to simulate realistic variable hospital intake:
+### 🚀 Single-Command Sandbox Deployment
+
+Thanks to the containerized ecosystem architecture, you do not need to configure local Python virtual environments, paths, or web endpoints manually. 
+
+#### 1. Spin Up the Microservice Cluster
+
+Open your terminal in the repository root and launch the composition:
+
+```bash
+docker compose up --build
+```
+
+This single orchestrator pulls the official Orthanc distribution, assembles your Python background environments, binds shared data volumes, and maps your local network ports automatically.
+
+#### 2. Access the Ecosystem Endpoints
+
+* **Clinical Triage Dashboard: http://localhost:8501
+
+* **Orthanc PACS Explorer Node: http://localhost:8042
+
+#### 3. Run the Production Modality Simulator
+To simulate real-time workflows pouring new clinical imaging files into your active container network, open a separate terminal window on your host computer and run the mock generator:
 
 ```bash
 python scripts/generate_test_dicoms.py
-```
-
-Upload the freshly manufactured .dcm cohort folder into http://localhost:8042/app/explorer.html#upload.
-
-### 2. Run the Data Orchestration Engine
-
-Extract metadata fields from the root PACS API, dynamically query the study level to parse modality attributes, and resolve routing schemas:
-
-```bash
-python scripts/ai_csv_generator.py
-```
-
-### 3. Execute the Dynamic Clinical Safety Audit
-
-Intercept the output payload and evaluate system routing accuracy and discrepancy rates on the fly:
-
-```bash
-python scripts/validate_ai.py
 ```
 
 ## 📊 Live Simulation Metrics & Edge-Case Trapping
