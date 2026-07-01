@@ -96,7 +96,7 @@ for p_id, p_name, desc, mod in test_cases:
     try:
         with open(file_path, "rb") as dicom_file:
             # Pushing the binary payload directly to Orthanc's native instance ingestion endpoint
-            response = requests.post("http://localhost:8042/instances", data=dicom_file.read())
+            response = requests.post("http://localhost:8042/instances", data=dicom_file.read(), auth=('orthanc', 'orthanc'))
             if response.status_code == 200 or response.status_code == 201:
                 print(f"📡 Successfully uploaded {p_id} to Orthanc PACS.")
             else:

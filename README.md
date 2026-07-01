@@ -1,123 +1,54 @@
-# Multi-Modality Clinical AI Triage Pipeline & Safety Auditor
+# 🏥 Multi-Modality Clinical AI Triage Pipeline & Dashboard
 
-An interoperable, end-to-end medical imaging data orchestration pipeline that ingests DICOM studies from a local PACS server, dynamically routes cases across multi-modality AI models based on metadata evaluation, and acts as an automated clinical safety gatekeeper by auditing discrepancies against expert human ground truth.
+An end-to-end, containerized clinical data pipeline designed for real-time PACS extraction, automated multi-modality AI triage simulation, and clinician-in-the-loop validation. 
+
+This system bridges hospital imaging workflows with interactive, real-time analytics to prioritize critical anomalies (e.g., Pneumothorax, Hemorrhage) safely.
 
 ## 🏗️ Architecture Overview
 
-The system establishes a robust middleware framework bridging clinical infrastructure, data governance, and analytics interfaces:
+The system is split into three decoupled microservices running inside an isolated Docker network:
+1. **Orthanc PACS (`orthanc-pacs`)**: Production-grade DICOM server hosting image instances.
+2. **Asynchronous File Listener (`triage-listener`)**: Python background daemon executing filesystem tracking.
+3. **Streamlit UI Interface (`triage-dashboard`)**: A database-driven, live-updating dashboard featuring a 5-second asynchronous auto-polling engine.
 
-* **Infrastructure Layer (`orthanc-pacs` container)**: A production-grade Orthanc PACS microservice serving multi-modality DICOM medical instances over containerized RESTful API endpoints.
-* **Data Orchestration Middleware (`triage-listener` container)**: An event-driven background daemon utilizing the `watchdog` framework to catch filesystem changes natively, strip sensitive PHI fields, and handle multi-modality AI routing schemas.
-* **Clinical Safety & Audit Layer**: Integrated rules-based validation filters that isolate discrepancies (such as the simulated `PATIENT_005` cross-reference validation conflict) directly into an elevated administrative review state.
-* **Visualization Layer (`triage-dashboard` container)**: A reactive frontend interface running on a continuous 5-second polling loop to hot-reload changing clinical queues, priority counters, and safety audit trails in real time.
+## ⚡ Key Engineering Features
 
-## ⚙️ Event-Driven Ingestion Engine (Watchdog Middleware)
+* **Multi-Container Orchestration**: Microservices communicate dynamically using internal Docker DNS bridges.
+* **Persistent SQL State Management**: Replaced static memory tables with a structured SQLite database (`triage.db`) to handle case triage transitions natively (`PENDING` -> `CLEARED`).
+* **Automated API Backfilling**: Integrated direct HTTP REST extraction with Orthanc to ingest metadata tags and inject telemetry payload states inline.
+* **Clinician-in-the-Loop Action Keys**: Implemented unique dynamic column action loops to clear reviewed cases without state collision.
+* **Ground-Truth Audit Exception Handlers**: Hardcoded data-integrity notice rules for specific mismatch audits (e.g., `PATIENT_005`).
 
-To transition this pipeline from a manual batch script into a real-time, production-ready healthcare sandbox, the system utilizes an asynchronous, event-driven architecture powered by a background filesystem listener (`scripts/watch_pacs.py`).
+## 🚀 Quick Start & Deployment
 
-### 🔄 Asynchronous Data Flow & Race Condition Mitigation
-
-In a live hospital environment, imaging modalities stream data streams sequentially. To replicate this safely without causing system chokes or cascading database writes, the middleware implements a **Thread-Locked Batch Accumulator Pattern**:
-
-1. **OS-Level Hooking:** The background listener binds directly to the absolute filesystem storage layer using the `watchdog` framework, trapping both file creation and modification loops natively.
-2. **Mutex Thread Locking (`threading.Lock`):** To prevent rapid-fire sequential DICOM file writes from spawning racing background processes, a persistent mutex lock isolates the core evaluation state.
-3. **Delayed Batch Accumulation:** Instead of executing the pipeline on every individual image alert, the handler sets a rolling countdown timer. Every subsequent write resets the window. The core orchestration engine (`ai_csv_generator.py`) is triggered **exactly once** only after the ingestion directory achieves a quiet window of silence.
-
-```text
- 📥 Sequential DICOM Writes 
- (PATIENT_001.dcm -> PATIENT_010.dcm)
-               │
-               ▼
-   [ 🕵️‍♂️ watch_pacs.py Active Listener ]
-               │
-      [ 🔒 Threading Lock ] ──► (Queues concurrent OS bursts)
-               │
-      [ ⏳ 5s Countdown Timer ] ◄── (Resets continuously on new activity)
-               │
-       (Ingestion Quiet Window Achieved)
-               │
-               ▼
- [ 🚀 EXECUTE SINGLE BATCH RUN: ai_csv_generator.py ]
-```
- 
----
-
-## 🛠️ Tech Stack & Protocols
-
-* **Medical Imaging Protocol:** DICOM (Digital Imaging and Communications in Medicine)
-* **PACS Node:** Orthanc server architecture
-* **Data Layer / Language:** Python 3 (Libraries: `pydicom`, `requests`, `numpy`, `csv`, `random`)
-* **Frontend Analytics:** Glide Engine (Low-Code Data Mapping & Cloud Synchronization)
-* **Frontend Analytics**: Streamlit Engine (Containerized web application with live data polling)
-* **Containerization & Orchestration**: Docker, Docker Compose, Linux Virtualization Subsystem (WSL2)
-
----
-
-## 🚀 Deployment & Sandbox Execution
-
-### 🚀 Single-Command Sandbox Deployment
-
-Thanks to the containerized ecosystem architecture, you do not need to configure local Python virtual environments, paths, or web endpoints manually. 
-
-#### 1. Spin Up the Microservice Cluster
-
-Open your terminal in the repository root and launch the composition:
+### 1. Launch the Stack Environment
+Build the images from blueprint configurations and initialize the isolated network cluster:
 
 ```bash
+docker compose down -v
 docker compose up --build
 ```
 
-This single orchestrator pulls the official Orthanc distribution, assembles your Python background environments, binds shared data volumes, and maps your local network ports automatically.
+### 2. Database Schema Initialization
+In a separate terminal window, initialize your local storage tables:
 
-#### 2. Access the Ecosystem Endpoints
+```bash
+python scripts/init_db.py
+```
 
-* **Clinical Triage Dashboard: http://localhost:8501
-
-* **Orthanc PACS Explorer Node: http://localhost:8042
-
-#### 3. Run the Production Modality Simulator
-To simulate real-time workflows pouring new clinical imaging files into your active container network, open a separate terminal window on your host computer and run the mock generator:
+### 3. Stream Simulated Modality Studies
+Simulate a rapid batch of 10 multi-modality DICOM files uploading to the PACS network:
 
 ```bash
 python scripts/generate_test_dicoms.py
 ```
 
-## 📊 Live Simulation Metrics & Edge-Case Trapping
+Open your browser to http://localhost:8501 to view live queue metrics and triage alerts seamlessly refreshing in real time.
 
-The safety framework is stress-tested using a dynamic validator that tracks performance across scaling workloads while successfully isolating targeted clinical blind spots (such as under-called critical spinal masses).
+## ⚖️ Intellectual Property, Governance & Compliance
 
-### Example Output Log (10-Patient Randomized Batch):
+* **Synthetic Data Safeguards**: No real patient health information (PHI) or identifiable clinical data is utilized within this repository. 
+* **Regulatory Compliance**: All DICOM instances used for simulation are entirely synthetic and procedurally manufactured inline, satisfying **HIPAA Safe Harbor** methods and **GDPR** anonymization principles for software development and demonstration.
+* **Ethics & Security**: By leveraging isolated container networks and decoupled mock environments, this architecture demonstrates how clinical AI orchestration models can be stress-tested without breaching hospital data-sharing agreements or touching live production environments.
 
-```Plaintext
-🩺 Starting Dynamic Multi-Modality Validation Audit...
----------------------------------------------------------------------------
-✅ PATIENT_001 (US): Pipeline routing verified successfully.
-✅ PATIENT_002 (CT): Pipeline routing verified successfully.
-✅ PATIENT_003 (US): Pipeline routing verified successfully.
-✅ PATIENT_004 (CT): Pipeline routing verified successfully.
-⚠️  PATIENT_005 (MR): MISMATCH DETECTED (Simulated Audit Target)
-...
-✅ PATIENT_010 (MR): Pipeline routing verified successfully.
----------------------------------------------------------------------------
-📊 CLINICAL PERFORMANCE METRICS SUMMARY
----------------------------------------------------------------------------
-🔹 Total Audited Multi-Modality Cases : 10
-🔹 Successful AI Alignments          : 9
-🔹 System Accuracy Rate              : 90.0%
-🔹 Overall AI Error Rate              : 10.0%
----------------------------------------------------------------------------
-
-🚨 DETAILED CLINICAL DISCREPANCY REPORT:
-• Patient ID: PATIENT_005 [MR]
-  Current Model: Spine-Decompression-v1
-  Issue:         AI model under-called a CRITICAL Malignant Mass as standard spinal stenosis.
-```
-
-## 🛡️ Intellectual Property, Governance & Compliance
-
-Data Privacy (HIPAA/GDPR Alignment): The custom Python routing framework isolates PACS internal instance handles from operational worklists, creating anonymized clinical_mrn hooks to eliminate the accidental spread of Protected Health Information (PHI).
-
-IP Defense: This technical framework is legally stamped under the author's jurisdiction. The dynamic method of cross-level REST tag resolution to validate third-party diagnostic algorithms establishes documented "Prior Art" on this repository.
-
-Developer: Adedamola
-Domain Focus: Clinical Data Orchestration, Imaging Middleware & Interoperable Healthcare Systems
+Developer: Adedamola Domain Focus: Clinical Data Orchestration, Imaging Middleware & Interoperable Healthcare Systems

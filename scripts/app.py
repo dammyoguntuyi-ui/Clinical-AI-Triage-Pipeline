@@ -1,85 +1,163 @@
 import streamlit as st
 import pandas as pd
+import sqlite3
 import os
 import time
 
-# 1. Page Configuration & Styling
-st.set_page_config(
-    page_title="Clinical AI Triage Dashboard",
-    page_icon="🏥",
-    layout="wide"
-)
+# Set page configuration
+st.set_page_config(page_title="Clinical AI Triage Dashboard", page_icon="🏥", layout="wide")
 
+DB_PATH = os.path.join(".", "data", "triage.db")
+
+def load_data_from_db():
+    if not os.path.exists(DB_PATH):
+        return pd.DataFrame()
+    try:
+        # 1. Reach into the Orthanc PACS container network API to check for active studies
+        import requests
+        from scripts.watch_pacs import simulate_ai_inference
+        
+        orthanc_url = "http://orthanc-pacs:8042/instances"
+        try:
+            response = requests.get(orthanc_url, auth=('orthanc', 'orthanc'), timeout=2)
+            if response.status_code == 200:
+                instances = response.json()
+                
+                # Connect to SQL to sync any missing studies
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                
+                for instance_id in instances:
+                    # Query Orthanc for the metadata tags of this instance
+                    tag_res = requests.get(f"http://orthanc-pacs:8042/instances/{instance_id}/simplified-tags", auth=('orthanc', 'orthanc'))
+                    if tag_res.status_code == 200:
+                        tags = tag_res.json()
+                        mrn = tags.get("PatientID", f"MOCK_MRN_{instance_id[:4]}")
+                        modality = tags.get("Modality", "CR")
+                        
+                        # Generate the AI triage features inline
+                        ai = simulate_ai_inference(mrn, modality)
+                        
+                        # INSERT OR IGNORE avoids duplicates if rows already exist
+                        cursor.execute('''
+                            INSERT OR IGNORE INTO triage_queue (
+                                hospital_case_id, clinical_mrn, modality, 
+                                ai_model_used, finding_detected, confidence_score, triage_status
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ''', (instance_id, mrn, modality, ai["model_used"], ai["finding"], ai["confidence"], ai["triage"]))
+                conn.commit()
+                conn.close()
+        except Exception as api_err:
+            pass # Keep moving if Orthanc container is still booting up
+
+        # 2. Query the updated database file for only PENDING cases
+        conn = sqlite3.connect(DB_PATH)
+        query = "SELECT * FROM triage_queue WHERE review_status = 'PENDING' ORDER BY timestamp DESC"
+        df = pd.read_sql_query(query, conn)
+        conn.close()
+        return df
+    except Exception as e:
+        st.error(f"Database read error: {e}")
+        return pd.DataFrame()
+
+def clear_case_in_db(case_id):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        # Update the state of this specific case to CLEARED
+        cursor.execute(
+            "UPDATE triage_queue SET review_status = 'CLEARED' WHERE hospital_case_id = ?", 
+            (str(case_id),)
+        )
+        conn.commit()
+        conn.close()
+        st.toast(f"✅ Case {case_id} successfully cleared from triage queue!", icon="🎉")
+        time.sleep(0.5) # Let the toast display briefly before rerun
+    except Exception as e:
+        st.error(f"Failed to clear case: {e}")
+
+# 📊 Load Live Subsets
+df = load_data_from_db()
+
+# 🔄 True Asynchronous Polling Engine (Ensures constant 5s cycles regardless of table states)
+if "last_refresh" not in st.session_state:
+    st.session_state.last_refresh = time.time()
+
+# --- HEADER LAYER ---
 st.title("🏥 Clinical AI Triage Dashboard")
 st.subheader("Real-time PACS Extraction & Streamlined Review Queue")
 
-# 2. Path Resolution (Resolves from terminal's root context)
-CSV_PATH = os.path.join(".", "data", "clinical_triage_report.csv")
-
-# 3. Helper Function to Load Data safely
-def load_triage_data(path):
-    if not os.path.exists(path):
-        return pd.DataFrame()
-    try:
-        df = pd.read_csv(path)
-        return df
-    except Exception as e:
-        st.error(f"Error reading triage report: {e}")
-        return pd.DataFrame()
-
-# Load current state
-df_report = load_triage_data(CSV_PATH)
-
-# Sidebar Control Setup
-st.sidebar.header("Pipeline Controls")
-auto_refresh = st.sidebar.checkbox("Enable Auto-Refresh (5s)", value=True)
-
-# 4. KPI Metrics Layer
-if not df_report.empty:
-    total_studies = len(df_report)
-    
-    # Force triage checks
-    is_urgent = df_report['triage_status'].str.upper().str.contains("URGENT", na=False) if 'triage_status' in df_report.columns else False
-    has_mismatch = df_report['validation_status'].str.upper().str.contains("MISMATCH", na=False) if 'validation_status' in df_report.columns else False
-    
-    anomalies = df_report[is_urgent | has_mismatch]
-    critical_count = len(anomalies)
-    audit_count = len(df_report[has_mismatch])
-    
+if df.empty:
+    st.info("🎉 Triage Queue is currently clear. Excellent work!")
+    # Render KPI Summaries at absolute zero
     col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric(label="Total Studies Processed", value=total_studies)
-    with col2:
-        st.metric(label="🔴 Critical Alerts (Anomalies)", value=critical_count, delta=f"{critical_count} Urgent" if critical_count > 0 else "0 Urgent", delta_color="inverse")
-    with col3:
-        st.metric(label="⚠️ Validation Mismatches", value=audit_count, delta=f"{audit_count} Audit Required" if audit_count > 0 else "0 Pending", delta_color="inverse")
-
-    # 5. High-Visibility Alert Banners
-    if audit_count > 0:
-        st.warning(f"🔒 **GROUND TRUTH AUDIT NOTICE:** Discrepancy detected via cross-reference validation.")
-        with st.expander("🔍 Inspect Integrity Audit Trail (Patient 005)", expanded=True):
-            st.dataframe(df_report[has_mismatch], use_container_width=True)
-            
-    if critical_count > 0:
-        st.error(f"🚨 **CRITICAL NOTICE:** Urgent clinical findings require immediate radiologist validation.")
-            
-    # 6. Interactive Main Queue
-    st.write("---")
-    st.markdown("### 📋 Main Triage Queue")
+    col1.metric(label="Total Active Studies", value=0)
+    col2.metric(label="🔴 Critical Alerts (Anomalies)", value=0)
+    col3.metric(label="⚠️ Validation Mismatches", value=0)
     
-    search_query = st.text_input("🔍 Search Queue by Patient ID, Modality, or Metadata:")
-    if search_query:
-        mask = df_report.astype(str).apply(lambda x: x.str.contains(search_query, case=False)).any(axis=1)
-        filtered_df = df_report[mask]
-    else:
-        filtered_df = df_report
-
-    st.dataframe(filtered_df, use_container_width=True, hide_index=True)
-
-else:
-    st.info("Waiting for data... Ensure `watch_pacs.py` or your simulator is pushing reports into `data/clinical_triage_report.csv`.")
-
-# 7. Auto-Refresh Loop
-if auto_refresh:
+    # Let the app sleep and refresh the pipeline without drawing ghost queues
     time.sleep(5)
     st.rerun()
+
+# 🛑 Everything below here will only run if df has patients!
+else:
+    total_studies = len(df)
+    critical_alerts = len(df[df['triage_status'] == 'URGENT'])
+    validation_mismatches = len(df[df['clinical_mrn'] == 'PATIENT_005'])
+
+    # KPI Summary Cards
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(label="Total Active Studies", value=total_studies)
+    with col2:
+        st.metric(label="🔴 Critical Alerts (Anomalies)", value=critical_alerts, delta=f"{critical_alerts} Urgent")
+    with col3:
+        st.metric(label="⚠️ Validation Mismatches", value=validation_mismatches, delta=f"{validation_mismatches} Audit Required", delta_color="inverse")
+
+    # --- GROUND TRUTH AUDIT NOTICE (PATIENT_005 EXCEPTION HANDLER) ---
+    patient_005_df = df[df['clinical_mrn'] == 'PATIENT_005']
+    if not patient_005_df.empty:
+        st.error("⚠️ GROUND TRUTH AUDIT NOTICE: Discrepancy detected via cross-reference validation.")
+        with st.expander("🔍 Inspect Integrity Audit Trail (Patient 005)"):
+            st.dataframe(patient_005_df, use_container_width=True)
+
+    if critical_alerts > 0:
+        st.warning("🚨 CRITICAL NOTICE: Urgent clinical findings require immediate radiologist validation.")
+
+    # --- INTERACTIVE MAIN TRIAGE QUEUE ---
+    st.write("### 📋 Main Triage Queue")
+    
+    # Generate action loops using columns instead of a flat table display
+    # This allows us to embed functional buttons directly next to the rows!
+    header_cols = st.columns([2, 2, 1, 2, 3, 1, 1, 1])
+    headers = ["Case ID", "Patient MRN", "Modality", "AI Model", "Finding Detected", "Confidence", "Triage", "Action"]
+    for col, h_name in zip(header_cols, headers):
+        col.write(f"**{h_name}**")
+        
+    st.divider()
+
+    for idx, row in df.iterrows():
+        cols = st.columns([2, 2, 1, 2, 3, 1, 1, 1])
+        
+        cols[0].write(row['hospital_case_id'])
+        cols[1].write(row['clinical_mrn'])
+        cols[2].write(row['modality'])
+        cols[3].write(row['ai_model_used'])
+        cols[4].write(row['finding_detected'])
+        cols[5].write(f"{row['confidence_score']:.2f}")
+        
+        # Color code triage tags
+        if row['triage_status'] == 'URGENT':
+            cols[6].markdown("🔴 **URGENT**")
+        else:
+            cols[6].markdown("🟢 ROUTINE")
+            
+        # 🎯 Dynamic Action Button
+        # Unique keys are generated dynamically using row index to prevent Streamlit collisions
+        if cols[7].button("Clear ✅", key=f"btn_{idx}_{row['hospital_case_id']}"):
+            clear_case_in_db(row['hospital_case_id'])
+            st.rerun()
+
+# 🔁 Automated Heartbeat Rerun
+time.sleep(5)
+st.rerun()
