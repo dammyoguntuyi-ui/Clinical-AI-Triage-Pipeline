@@ -1,35 +1,72 @@
-# Multi-Modality Clinical AI Triage Ingestion Pipeline
+# 🏥 Enterprise Clinical AI Triage Pipeline
 
-An end-to-end, containerized microservice pipeline engineered to simulate real-time hospital PACS data extraction, asynchronous tracking, and interactive clinical triage prioritization.
+An asynchronous, containerized data architecture that simulates real-time hospital ingestion, dataset reconciliation, and automated clinical triage. This pipeline highlights the bridge between frontline healthcare workflows (Radiography/PACS) and production-grade health-tech engineering.
 
-## 🏗️ System Architecture & Service Mesh
-The ecosystem is completely decoupled into three independent microservices orchestrated via a virtual Docker network mesh using internal container-to-container DNS hostname routing:
+---
 
-1. **`orthanc-pacs`**: An open-source PACS server node acting as the centralized imaging repository running native DICOM REST endpoints.
-2. **`triage-listener`**: An asynchronous Python background daemon tracking filesystem ingestion loops and extracting header metadata.
-3. **`triage-dashboard`**: A real-time Streamlit analytics web app acting as the clinician-in-the-loop review interface.
+## 🏗️ System Architecture
 
-## 🚀 Key Engineering Features
-* **Persistent State Machine**: Migrated from an unstable, stateless file-watching setup to a centralized **SQLite database matrix**. State mutations (`PENDING` ➔ `CLEARED`) utilize atomic transaction keys via UI action buttons to prevent multi-container race conditions.
-* **REST Data Ingestion**: Re-engineered UI data synchronization by dropping filesystem dependencies and utilizing asynchronous HTTP REST API requests directly to the Orthanc PACS server.
-* **Regulatory Compliance**: Built around 100% synthetic patient DICOM files to guarantee complete data privacy, explicitly adhering to **HIPAA Safe Harbor** methods and **GDPR** anonymization principles.
+The pipeline runs entirely inside an isolated, multi-container environment orchestrated via Docker Compose:
 
-## 🛠️ Tech Stack & Requirements
-* **Language:** Python 3.11+ (Streamlit, Pydicom, Requests)
-* **Infrastructure:** Docker, Docker Compose
-* **Database:** SQLite 3
+1. **Ingestion Tier (`streamer` container):** Simulates an Electronic Medical Record (EMR) telemetry feed, generating schema-validated healthcare metrics (heart rates) using the international **HL7 FHIR standard** (via Pydantic).
+2. **Reconciliation Tier (`dashboard` container):** A Streamlit analytical dashboard that pulls live telemetries and runs a strict folder-polling engine to cross-reference patient MRNs against local PACS/modality assets.
+3. **AI Inference Tier:** Triggers automatically upon successful patient data reconciliation, routing the synchronized datasets to a mockup deep-learning diagnostic classifier (`ClinicalResNet-v4.2-Native`).
 
-## ⚡ Quick Start (Local Deployment)
-To spin up the entire isolated network infrastructure locally, clone this repository and execute:
+---
+
+## 🛠️ Technology Stack
+
+* **Language Environment:** Python 3.11-slim
+* **Healthcare Interoperability:** HL7 FHIR (`fhir.resources` Pydantic models)
+* **Frontend Web Canvas:** Streamlit (Dynamic Auto-Refresh UI)
+* **Infrastructure Orchestration:** Docker & Docker Compose
+* **Data Processing Management:** File-system I/O volumes, Queue Flushing mechanisms
+
+---
+
+## 📂 Repository Structure
+
+```text
+CLINICAL-AI-TRIAGE-PIPELINE/
+├── data/                    # Local PACS Storage Repository (DICOM / Assets)
+├── scripts/
+│   └── mock_streamer.py     # Background FHIR simulation engine
+├── streaming_intake/        # Shared Docker volume buffer queue
+├── app.py                   # Main pipeline interface & reconciliation engine
+├── Dockerfile               # Linux blueprint containerization layers
+├── docker-compose.yml       # Multi-service network orchestration config
+└── requirements.txt         # Package dependencies
+```
+
+## 🚀 Deployment Instructions
+
+### Prerequisite
+Ensure you have Docker Desktop installed and running on your local machine.
+
+1. Launch the Cluster
+Clone the repository, open your terminal inside the root folder, and execute a fresh service build:
 
 ```bash
-# Initialize a pristine database instance
-python scripts/init_db.py
-
-# Build and launch the containerized cluster
 docker compose up --build
 ```
 
-The dashboard will instantly spin up and auto-poll the pipeline state live at http://localhost:8501.
+This command automatically installs dependencies inside the isolated containers, mounts the shared folder volumes, and fires up both systems.
 
-Developer: Adedamola Domain Focus: Clinical Data Orchestration, Imaging Middleware & Interoperable Healthcare Systems
+2. Access the Engine
+Open your web browser and navigate to:
+
+```Plaintext
+http://localhost:8501
+```
+
+3. Simulating Live Modality Reconciliation (PACS Demo)
+The dashboard sidebar updates on a pacing delay (configured to a comfortable demonstration interval).
+
+Note the active Patient Identity (MRN) on the dashboard (e.g., pat-8150).
+
+To simulate a matching imaging study arriving from the radiography department, create or rename a file inside your local ./data folder using that exact tag: pat-8150_chest_xray.dcm.
+
+The Modality Cross-Reference Engine will instantly flip from a scanning state (Yellow) to a synchronized state (Green), deploying the Downstream AI Inference Engine cluster live on screen.
+
+### 🧠 Clinical Engineering Rationale
+In real medical environments, imaging datasets cannot be accurately analyzed by downstream AI networks without corresponding clinical telemetry validation. This project proves a production-level understanding of handling data latency, preventing queue backpressure, verifying rigid medical messaging models, and securely matching data paths before invoking diagnostic software layers.
