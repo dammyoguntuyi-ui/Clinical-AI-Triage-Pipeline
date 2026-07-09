@@ -70,3 +70,11 @@ The Modality Cross-Reference Engine will instantly flip from a scanning state (Y
 
 ### 🧠 Clinical Engineering Rationale
 In real medical environments, imaging datasets cannot be accurately analyzed by downstream AI networks without corresponding clinical telemetry validation. This project proves a production-level understanding of handling data latency, preventing queue backpressure, verifying rigid medical messaging models, and securely matching data paths before invoking diagnostic software layers.
+
+---
+
+## 👥 Author & Developer
+
+* **Adedamola Oguntuyi** * [LinkedIn Profile](https://www.linkedin.com/in/adedamola-oguntuyi-80347a332/)
+  * [GitHub Portfolio](https://github.com/dammyoguntuyi-ui)
+  * *Clinical Radiographer specializing in Medical Data Science & Healthcare AI Ingestion Pipelines.*
