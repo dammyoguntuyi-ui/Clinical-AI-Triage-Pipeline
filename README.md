@@ -70,6 +70,29 @@ python -m streamlit run app.py
 ```
 Open your browser to http://localhost:8501 to view the live processing grid.
 
+## 🐳 Containerized Deployment (Docker Compose)
+
+The pipeline is fully containerized into a decoupled microservices architecture, isolating the background telemetry engine (`streamer`) from the analytical user interface (`dashboard`) using a dedicated virtual container network.
+
+### Prerequisites
+Ensure you have [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running on your machine.
+
+### 1. Build and Launch the Microservices Network
+Execute the orchestration layer block from your terminal root to build the images and spin up the live environment in the foreground:
+```bash
+docker compose up --build
+```
+
+### 2. Access the Infrastructure
+Once the container layers initialize, open your browser to the exposed frontend interface port:
+http://localhost:8501
+
+### 3. Teardown the Environment
+To cleanly stop the containers and release the isolated virtual network bridges, execute:
+```bash
+docker compose down
+```
+
 ## 🧪 Simulation Profile Mappings
 
 The pipeline generates realistic medical scenarios to test AI routing precision across multiple organs:
