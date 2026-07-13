@@ -1,75 +1,93 @@
-# 🏥 Enterprise Clinical AI Triage Pipeline
+# 🏥 Enterprise Multi-Modality Clinical AI Triage Pipeline
 
-An asynchronous, containerized data architecture that simulates real-time hospital ingestion, dataset reconciliation, and automated clinical triage. This pipeline highlights the bridge between frontline healthcare workflows (Radiography/PACS) and production-grade health-tech engineering.
-
----
-
-## 🏗️ System Architecture
-
-The pipeline runs entirely inside an isolated, multi-container environment orchestrated via Docker Compose:
-
-1. **Ingestion Tier (`streamer` container):** Simulates an Electronic Medical Record (EMR) telemetry feed, generating schema-validated healthcare metrics (heart rates) using the international **HL7 FHIR standard** (via Pydantic).
-2. **Reconciliation Tier (`dashboard` container):** A Streamlit analytical dashboard that pulls live telemetries and runs a strict folder-polling engine to cross-reference patient MRNs against local PACS/modality assets.
-3. **AI Inference Tier:** Triggers automatically upon successful patient data reconciliation, routing the synchronized datasets to a mockup deep-learning diagnostic classifier (`ClinicalResNet-v4.2-Native`).
+An asynchronous, event-driven data integration and triage pipeline engineered to solve healthcare data fragmentation. The system ingests and aggregates real-time **HL7/FHIR telemetry vectors** alongside polymorphic **DICOM radiology imaging headers (XR, CT, MR, US)** into a unified clinical encounter session, simulating automated background AI diagnostic inference for high-priority emergency routing.
 
 ---
 
-## 🛠️ Technology Stack
+## 🚀 Key Architectural Features
 
-* **Language Environment:** Python 3.11-slim
-* **Healthcare Interoperability:** HL7 FHIR (`fhir.resources` Pydantic models)
-* **Frontend Web Canvas:** Streamlit (Dynamic Auto-Refresh UI)
-* **Infrastructure Orchestration:** Docker & Docker Compose
-* **Data Processing Management:** File-system I/O volumes, Queue Flushing mechanisms
+* **Multi-Modality Ingestion & Polymorphism:** Simultaneously consumes and parses distinct healthcare data shapes—structured text-based patient vital streams and deep binary imaging metadata blocks.
+* **Aggregated Middleware Design:** Eliminates standard hospital machine silos by dynamically matching disparate network feeds (ward beds vs. radiology PACS networks) into a single unified session bound by a `Patient ID`.
+* **Asynchronous Reality Emulation:** Accounts for real-world physical constraints of radiology environments (e.g., monitor disconnects due to MRI safety or CT streak artifact prevention) by tracking and graphing historical parameters alongside active imaging diagnostic slots.
+* **Live Ambient Monitor Fragment Loop:** Leverages a non-blocking UI fragment lifecycle mechanism that auto-polls the core ingestion engine every 20 seconds, mimicking an intensive care dashboard or stroke triage queue without freezing the user interface thread.
 
 ---
 
-## 📂 Repository Structure
+## 📂 System Architecture & Data Flow
 
-```text
-CLINICAL-AI-TRIAGE-PIPELINE/
-├── data/                    # Local PACS Storage Repository (DICOM / Assets)
-├── scripts/
-│   └── mock_streamer.py     # Background FHIR simulation engine
-├── streaming_intake/        # Shared Docker volume buffer queue
-├── app.py                   # Main pipeline interface & reconciliation engine
-├── Dockerfile               # Linux blueprint containerization layers
-├── docker-compose.yml       # Multi-service network orchestration config
-└── requirements.txt         # Package dependencies
+```mermaid
+graph TD
+    %% Define Styles
+    classDef source fill:#1f4068,stroke:#162447,stroke-width:2px,color:#fff;
+    classDef engine fill:#e43f5a,stroke:#162447,stroke-width:2px,color:#fff;
+    classDef model fill:#0f4c81,stroke:#162447,stroke-width:2px,color:#fff;
+    classDef ui fill:#1b1b2f,stroke:#162447,stroke-width:2px,color:#fff;
+
+    %% Nodes configuration
+    A[Hospital Ward Monitor<br>HL7/FHIR Telemetry] :::source
+    B[Radiology PACS Node<br>DICOM Metadata] :::source
+    
+    C[Aggregated Session Middleware<br>app.py Engine] :::engine
+    
+    D[Telemetry Route<br>In-Memory Vector Cache] :::model
+    E[Radiology Route<br>RadAI Neural Inference Layer] :::model
+    
+    F[Streamlit Ambient Ingestion Dashboard] :::ui
+
+    %% Architecture Links
+    A -->|Asynchronous SpO2 Packets| C
+    B -->|Optional XR / CT / MR / US Headers| C
+    
+    C -->|Session Matching via Patient ID| D
+    C -->|Dynamic Polymorphic Routing| E
+    
+    D -->|Continuous Vitals Trend Chart| F
+    E -->|Diagnostic Finding Tokens & Visuals| F
 ```
 
-## 🚀 Deployment Instructions
+1. Generation: The streaming module creates a synchronized patient record packet containing mandatory core vitals and an optional random assignment to a radiology exam type based on clinical probability.
+2. Parsing: The extraction module reads incoming resource structures. Telemetry updates numeric vector history, while radiology nodes split off into specific diagnostic tracks (e.g., matching a Head CT to a brain bleed classification).
+3. Prioritization: If an abnormality crosses a clinical threshold or an AI model flags a critical diagnostic finding, the triage engine shifts the record's priority state to HIGH PRIORITY and updates the visual container layer immediately.
 
-### Prerequisite
-Ensure you have Docker Desktop installed and running on your local machine.
+## 🛠️ Tech Stack & Healthcare Standards
 
-1. Launch the Cluster
-Clone the repository, open your terminal inside the root folder, and execute a fresh service build:
+Language: Python 3.x
+Frontend Framework: Streamlit (Utilizing advanced state handling and @st.fragment scheduling)
+Data Layout Standards: HL7/FHIR v4.0.1 compliance representations (Observation & Bundle schemas)
+Imaging Formats: DICOM Metadata Attribute Extraction Simulation (XR, CT, MR, US modalities)
+Data Engineering: Pandas (In-memory structural ledger manipulation and chronological vector tracking)
 
-```bash
-docker compose up --build
+## 💻 Local Quickstart Installation
+
+1. Clone the Workspace Repository
+```Bash
+git clone [https://github.com/YOUR_GITHUB_USERNAME/Clinical-AI-Triage-Pipeline.git](https://github.com/YOUR_GITHUB_USERNAME/Clinical-AI-Triage-Pipeline.git)
+cd Clinical-AI-Triage-Pipeline
 ```
 
-This command automatically installs dependencies inside the isolated containers, mounts the shared folder volumes, and fires up both systems.
-
-2. Access the Engine
-Open your web browser and navigate to:
-
-```Plaintext
-http://localhost:8501
+2. Set Up a Python Virtual Environment (Recommended)
+```Bash
+python -m venv .venv
+# On Windows PowerShell:
+.\.venv\Scripts\Activate.ps1
 ```
 
-3. Simulating Live Modality Reconciliation (PACS Demo)
-The dashboard sidebar updates on a pacing delay (configured to a comfortable demonstration interval).
+3. Install Core Project Dependencies
+```Bash
+pip install streamlit pandas
+```
+4. Execute the Application Pipeline Engine
+Run the Streamlit entrypoint script via your active python module mapper:
+```Bash
+python -m streamlit run app.py
+```
+Open your browser to http://localhost:8501 to view the live processing grid.
 
-Note the active Patient Identity (MRN) on the dashboard (e.g., pat-8150).
+## 🧪 Simulation Profile Mappings
 
-To simulate a matching imaging study arriving from the radiography department, create or rename a file inside your local ./data folder using that exact tag: pat-8150_chest_xray.dcm.
+The pipeline generates realistic medical scenarios to test AI routing precision across multiple organs:
 
-The Modality Cross-Reference Engine will instantly flip from a scanning state (Yellow) to a synchronized state (Green), deploying the Downstream AI Inference Engine cluster live on screen.
-
-### 🧠 Clinical Engineering Rationale
-In real medical environments, imaging datasets cannot be accurately analyzed by downstream AI networks without corresponding clinical telemetry validation. This project proves a production-level understanding of handling data latency, preventing queue backpressure, verifying rigid medical messaging models, and securely matching data paths before invoking diagnostic software layers.
+Modality Body Target Controlled Critical Finding Target Response Pathway Telemetry Vitals Hypoxia (SpO2 < 90%) Alarm Banner + Inverse Delta Metric XR Chest Pneumothorax (Collapsed Lung) ICU Registrar Queue Escalation Token CT Head Acute Intracranial Hemorrhage (Brain Bleed)Emergency Neurological Surgery Alert MR Spine Acute Spinal Cord Compression Immediate Orthopedic/Neuro Traumatic Lock US Abdomen Abdominal Aortic Aneurysm (AAA) Rupture Vascular Theatre Priority Override
 
 ---
 
