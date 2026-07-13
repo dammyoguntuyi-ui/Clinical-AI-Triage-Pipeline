@@ -17,30 +17,17 @@ An asynchronous, event-driven data integration and triage pipeline engineered to
 
 ```mermaid
 graph TD
-    %% Define Styles
-    classDef source fill:#1f4068,stroke:#162447,stroke-width:2px,color:#fff;
-    classDef engine fill:#e43f5a,stroke:#162447,stroke-width:2px,color:#fff;
-    classDef model fill:#0f4c81,stroke:#162447,stroke-width:2px,color:#fff;
-    classDef ui fill:#1b1b2f,stroke:#162447,stroke-width:2px,color:#fff;
+    A[Hospital Ward Monitor<br>HL7/FHIR Telemetry]
+    B[Radiology PACS Node<br>DICOM Metadata]
+    C[Aggregated Session Middleware<br>app.py Engine]
+    D[Telemetry Route<br>In-Memory Vector Cache]
+    E[Radiology Route<br>RadAI Neural Inference Layer]
+    F[Streamlit Ambient Ingestion Dashboard]
 
-    %% Nodes configuration
-    A[Hospital Ward Monitor<br>HL7/FHIR Telemetry] :::source
-    B[Radiology PACS Node<br>DICOM Metadata] :::source
-    
-    C[Aggregated Session Middleware<br>app.py Engine] :::engine
-    
-    D[Telemetry Route<br>In-Memory Vector Cache] :::model
-    E[Radiology Route<br>RadAI Neural Inference Layer] :::model
-    
-    F[Streamlit Ambient Ingestion Dashboard] :::ui
-
-    %% Architecture Links
     A -->|Asynchronous SpO2 Packets| C
     B -->|Optional XR / CT / MR / US Headers| C
-    
     C -->|Session Matching via Patient ID| D
     C -->|Dynamic Polymorphic Routing| E
-    
     D -->|Continuous Vitals Trend Chart| F
     E -->|Diagnostic Finding Tokens & Visuals| F
 ```
@@ -83,11 +70,19 @@ python -m streamlit run app.py
 ```
 Open your browser to http://localhost:8501 to view the live processing grid.
 
+```markdown
 ## 🧪 Simulation Profile Mappings
 
 The pipeline generates realistic medical scenarios to test AI routing precision across multiple organs:
 
-Modality Body Target Controlled Critical Finding Target Response Pathway Telemetry Vitals Hypoxia (SpO2 < 90%) Alarm Banner + Inverse Delta Metric XR Chest Pneumothorax (Collapsed Lung) ICU Registrar Queue Escalation Token CT Head Acute Intracranial Hemorrhage (Brain Bleed)Emergency Neurological Surgery Alert MR Spine Acute Spinal Cord Compression Immediate Orthopedic/Neuro Traumatic Lock US Abdomen Abdominal Aortic Aneurysm (AAA) Rupture Vascular Theatre Priority Override
+| Modality | Body Target | Controlled Critical Finding | Target Response Pathway |
+| :--- | :--- | :--- | :--- |
+| **Telemetry** | Vitals | Hypoxia (SpO2 < 90%) | Alarm Banner + Inverse Delta Metric |
+| **XR** | Chest | Pneumothorax (Collapsed Lung) | ICU Registrar Queue Escalation Token |
+| **CT** | Head | Acute Intracranial Hemorrhage (Brain Bleed) | Emergency Neurological Surgery Alert |
+| **MR** | Spine | Acute Spinal Cord Compression | Immediate Orthopedic/Neuro Traumatic Lock |
+| **US** | Abdomen | Abdominal Aortic Aneurysm (AAA) Rupture | Vascular Theatre Priority Override |
+```
 
 ---
 
