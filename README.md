@@ -70,7 +70,6 @@ python -m streamlit run app.py
 ```
 Open your browser to http://localhost:8501 to view the live processing grid.
 
-```markdown
 ## 🧪 Simulation Profile Mappings
 
 The pipeline generates realistic medical scenarios to test AI routing precision across multiple organs:
@@ -82,7 +81,6 @@ The pipeline generates realistic medical scenarios to test AI routing precision 
 | **CT** | Head | Acute Intracranial Hemorrhage (Brain Bleed) | Emergency Neurological Surgery Alert |
 | **MR** | Spine | Acute Spinal Cord Compression | Immediate Orthopedic/Neuro Traumatic Lock |
 | **US** | Abdomen | Abdominal Aortic Aneurysm (AAA) Rupture | Vascular Theatre Priority Override |
-```
 
 ---
 
