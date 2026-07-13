@@ -1,15 +1,17 @@
 version: '3.8'
 
 services:
-  # Service 1: The background FHIR data streaming engine
+  # Service 1: Background data engine loop (Runs headless script)
   streamer:
     build: .
     container_name: fhir_mock_streamer
     command: python scripts/mock_streamer.py
     volumes:
-      - .:/app  # Mounts your local workspace so files write back to your machine
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
 
-  # Service 2: The frontend UI interface dashboard
+  # Service 2: The interactive user interface dashboard
   dashboard:
     build: .
     container_name: clinical_ai_dashboard
@@ -17,6 +19,8 @@ services:
     ports:
       - "8501:8501"
     volumes:
-      - .:/app  # Shares the exact same folder structure with the streamer container
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
     depends_on:
       - streamer
