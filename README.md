@@ -46,24 +46,24 @@ Data Engineering: Pandas (In-memory structural ledger manipulation and chronolog
 
 ## 💻 Local Quickstart Installation
 
-1. Clone the Workspace Repository
-```Bash
-git clone [https://github.com/YOUR_GITHUB_USERNAME/Clinical-AI-Triage-Pipeline.git](https://github.com/YOUR_GITHUB_USERNAME/Clinical-AI-Triage-Pipeline.git)
+### 1. Clone the Workspace Repository
+```bash
+git clone https://github.com/dammyoguntuyi-ui/Clinical-AI-Triage-Pipeline.git
 cd Clinical-AI-Triage-Pipeline
 ```
 
-2. Set Up a Python Virtual Environment (Recommended)
+### 2. Set Up a Python Virtual Environment (Recommended)
 ```Bash
 python -m venv .venv
 # On Windows PowerShell:
 .\.venv\Scripts\Activate.ps1
 ```
 
-3. Install Core Project Dependencies
+### 3. Install Core Project Dependencies
 ```Bash
 pip install streamlit pandas
 ```
-4. Execute the Application Pipeline Engine
+### 4. Execute the Application Pipeline Engine
 Run the Streamlit entrypoint script via your active python module mapper:
 ```Bash
 python -m streamlit run app.py
