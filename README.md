@@ -38,11 +38,11 @@ graph TD
 
 ## 🛠️ Tech Stack & Healthcare Standards
 
-Language: Python 3.x
-Frontend Framework: Streamlit (Utilizing advanced state handling and @st.fragment scheduling)
-Data Layout Standards: HL7/FHIR v4.0.1 compliance representations (Observation & Bundle schemas)
-Imaging Formats: DICOM Metadata Attribute Extraction Simulation (XR, CT, MR, US modalities)
-Data Engineering: Pandas (In-memory structural ledger manipulation and chronological vector tracking)
+* **Language:** Python 3.x
+* **Frontend Framework:** Streamlit (Utilizing advanced state handling and @st.fragment scheduling)
+* **Data Layout Standards:** HL7/FHIR v4.0.1 compliance representations (Observation & Bundle schemas)
+* **Imaging Formats:** DICOM Metadata Attribute Extraction Simulation (XR, CT, MR, US modalities)
+* **Data Engineering:** Pandas (In-memory structural ledger manipulation and chronological vector tracking)
 
 ## 💻 Local Quickstart Installation
 
