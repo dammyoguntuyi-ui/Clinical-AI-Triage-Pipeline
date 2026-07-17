@@ -101,3 +101,29 @@ def get_next_stream_packet():
         packet["radiology_exam"] = generate_imaging(triage)
 
     return packet
+
+# This keeps the container alive and serving network checks when run directly
+if __name__ == "__main__":
+    import socket
+    import time
+
+    # Bind to an internal port so our Docker health check has something to ping
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        server.bind(("0.0.0.0", 5000))
+        server.listen(5)
+        print("🟢 Mock Streamer Network Daemon Active on port 5000...")
+        
+        # Keep the process open indefinitely to listen for health checks
+        while True:
+            try:
+                client_socket, addr = server.accept()
+                # Close connection quickly; it's just a health check ping
+                client_socket.close() 
+            except Exception:
+                time.sleep(1)
+    except Exception as e:
+        print(f"🔴 Daemon error: {e}")
+        # Fallback to keep container alive if port is already bound
+        while True:
+            time.sleep(3600)

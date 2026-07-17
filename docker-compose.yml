@@ -1,26 +1,43 @@
 version: '3.8'
 
 services:
-  # Service 1: Background data engine loop (Runs headless script)
-  streamer:
-    build: .
-    container_name: fhir_mock_streamer
+  mock_streamer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clinical_mock_streamer
+    # Keeps the streamer running in the background using your python process command
     command: python scripts/mock_streamer.py
     volumes:
       - .:/app
-    environment:
-      - PYTHONUNBUFFERED=1
+    networks:
+      - clinical_triage_net
+    restart: on-failure:3
+    healthcheck:
+      # Uses Python directly to test if port 5000 is open and accepting connections
+      test: ["CMD", "python", "-c", "import socket; s = socket.socket(); s.connect(('127.0.0.1', 5000))"]
+      interval: 5s     # Checks every 5 seconds to accelerate the initial dashboard boot time
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 
-  # Service 2: The interactive user interface dashboard
-  dashboard:
-    build: .
-    container_name: clinical_ai_dashboard
-    command: python -m streamlit run app.py --server.port=8501 --server.address=0.0.0.0
+  frontend_dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clinical_triage_dashboard
+    # Runs the streamlit frontend out of the same base build image
+    command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
     ports:
       - "8501:8501"
     volumes:
       - .:/app
-    environment:
-      - PYTHONUNBUFFERED=1
+    networks:
+      - clinical_triage_net
     depends_on:
-      - streamer
+      mock_streamer:
+        condition: service_healthy
+
+networks:
+  clinical_triage_net:
+    driver: bridge

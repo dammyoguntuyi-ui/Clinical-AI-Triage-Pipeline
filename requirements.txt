@@ -4,3 +4,4 @@ requests
 watchdog
 pydicom
 fhir.resources
+pytest>=7.0.0
