@@ -59,14 +59,14 @@ The pipeline generates realistic medical scenarios to test AI routing precision 
 
 ## 🚀 Quick Start Installation
 
-1. Clone the Workspace Repository
+### 1. Clone the Workspace Repository
 
 ```Bash
-git clone [https://github.com/dammyoguntuyi-ui/Clinical-AI-Triage-Pipeline.git](https://github.com/dammyoguntuyi-ui/Clinical-AI-Triage-Pipeline.git)
+git clone https://github.com/dammyoguntuyi-ui/Clinical-AI-Triage-Pipeline.git
 cd Clinical-AI-Triage-Pipeline
 ```
 
-2. Set Up a Python Virtual Environment (Recommended for local running)
+### 2. Set Up a Python Virtual Environment (Recommended for local running)
 
 ```Bash
 python -m venv .venv
@@ -74,7 +74,7 @@ python -m venv .venv
 .\venv\Scripts\Activate.ps1
 ```
 
-3. Containerized Deployment (Docker Compose)
+### 3. Containerized Deployment (Docker Compose)
 
 To spin up the isolated, fully decoupled microservice architecture:
 
@@ -89,7 +89,7 @@ To cleanly stop the containers and release the isolated virtual network bridges,
 docker-compose down
 ```
 
-4. Executing the Automated Test Suite
+### 4. Executing the Automated Test Suite
 
 To verify the core data validation logic, schema fallback routing, and polymorphic DICOM header validation:
 
