@@ -30,9 +30,9 @@ graph TD
         end
     end
 
-    style Browser fill:#f9f,stroke:#333,stroke-width:2px
-    style Dashboard fill:#bbf,stroke:#333,stroke-width:2px
-    style Streamer fill:#bfb,stroke:#333,stroke-width:2px
+    style Browser fill:#f9f,stroke:#333,stroke-width:2px,color:#111
+    style Dashboard fill:#bbf,stroke:#333,stroke-width:2px,color:#111
+    style Streamer fill:#bfb,stroke:#333,stroke-width:2px,color:#111
 ```
 
 ## 🛠️ Core Features & Engineering Highlights
