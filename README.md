@@ -18,15 +18,15 @@ The following diagram illustrates how the components interact across the isolate
 
 ```mermaid
 graph TD
-    subgraph Host Machine (WSL / Docker Environment)
-        Browser[Local Web Browser<br>localhost:8501] <--> |Port Mapping 8501| Dashboard
+    subgraph "Host Machine (WSL / Docker Environment)"
+        Browser["Local Web Browser<br>localhost:8501"] <--> |"Port Mapping 8501"| Dashboard
         
-        subgraph Isolated Bridge Network (clinical_triage_net)
-            Dashboard[Streamlit Frontend Dashboard<br>clinical_triage_dashboard]
-            Streamer[Asynchronous Telemetry Streamer<br>clinical_mock_streamer]
+        subgraph "Isolated Bridge Network (clinical_triage_net)"
+            Dashboard["Streamlit Frontend Dashboard<br>clinical_triage_dashboard"]
+            Streamer["Asynchronous Telemetry Streamer<br>clinical_mock_streamer"]
             
-            Dashboard -.-> |Native Python Socket Ping<br>Port 5000 Health Check| Streamer
-            Streamer ===> |FHIR-Compliant Bundles| Dashboard
+            Dashboard -.-> |"Native Python Socket Ping<br>Port 5000 Health Check"| Streamer
+            Streamer ===> |"FHIR-Compliant Bundles"| Dashboard
         end
     end
 
