@@ -1,6 +1,17 @@
-import datetime
-import random
+import io
+import os
+import sys
+import time
 import uuid
+import random
+import socket
+import datetime
+import base64
+
+# pydicom specific imports for in-memory dataset structural manipulation
+import pydicom
+from pydicom.dataset import FileDataset, FileMetaDataset
+from pydicom.uid import ExplicitVRLittleEndian, generate_uid
 
 
 def generate_vitals(triage_status):
@@ -67,6 +78,85 @@ def generate_imaging(triage_status):
         "triage_priority": priority,
     }
 
+def generate_synthetic_dicom_in_memory(modality: str, patient_id: str) -> pydicom.Dataset:
+    """
+    Generates a fully compliant, 100% synthetic in-memory DICOM object 
+    for XR, CT, MR, or US modalities. Completely free of PII for HIPAA/GDPR.
+    """
+    modality = modality.upper()
+    if modality not in ["CT", "MR", "XR", "US"]:
+        raise ValueError("Unsupported modality. Choose from CT, MR, XR, or US.")
+
+    # 1. Initialize Mandatory DICOM File Meta Information
+    file_meta = FileMetaDataset()
+    file_meta.FileMetaInformationGroupLength = 0
+    file_meta.FileMetaInformationVersion = b'\x00\x01'
+    file_meta.MediaStorageSOPClassUID = generate_uid()
+    file_meta.MediaStorageSOPInstanceUID = generate_uid()
+    file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
+    file_meta.ImplementationClassUID = generate_uid()
+
+    # 2. Create the FileDataset instance (In-Memory Sandbox)
+    ds = FileDataset(None, {}, file_meta=file_meta, preamble=b"\x00" * 128)
+    ds.is_little_endian = True
+    ds.is_implicit_VR = False
+
+    # 3. Inject Compliant Anonymous Patient/Study Demographics
+    ds.PatientName = "ANONYMOUS^PATIENT"
+    ds.PatientID = patient_id  # Tied cleanly to your FHIR pipeline ID
+    ds.PatientBirthDate = ""    # Empty string to explicitly remove age data
+    ds.PatientSex = random.choice(["M", "F", "O"])
+    
+    # Study Metadata
+    now = datetime.datetime.now()
+    ds.StudyDate = now.strftime("%Y%m%d")
+    ds.StudyTime = now.strftime("%H%M%S")
+    ds.AccessionNumber = f"ACC-{random.randint(10000, 99999)}"
+    ds.Modality = modality
+    ds.StudyInstanceUID = generate_uid()
+    ds.SeriesInstanceUID = generate_uid()
+    ds.SOPInstanceUID = file_meta.MediaStorageSOPInstanceUID
+    ds.SOPClassUID = file_meta.MediaStorageSOPClassUID
+
+    # 4. Configure Modality-Specific Pixel Geometries
+    if modality == "XR":
+        rows, cols = 1024, 1024
+        samples_per_pixel = 1
+        photometric = "MONOCHROME2"
+        bits_allocated = 16
+    elif modality in ["CT", "MR"]:
+        rows, cols = 512, 512
+        samples_per_pixel = 1
+        photometric = "MONOCHROME2"
+        bits_allocated = 16
+    elif modality == "US":
+        rows, cols = 640, 480
+        samples_per_pixel = 3  # RGB Matrix for Doppler mapping
+        photometric = "RGB"
+        bits_allocated = 8
+
+    # 5. Apply Image Plane Framework Tags
+    ds.Rows = rows
+    ds.Columns = cols
+    ds.SamplesPerPixel = samples_per_pixel
+    ds.PhotometricInterpretation = photometric
+    ds.BitsAllocated = bits_allocated
+    ds.BitsStored = bits_allocated
+    ds.HighBit = bits_allocated - 1
+    ds.PixelRepresentation = 0 if modality == "US" else 1  # 0=Unsigned, 1=Signed
+
+    # 6. Synthesize the Pixel Matrix Payload (Using pure numeric patterns)
+    total_pixels = rows * cols * samples_per_pixel
+    if bits_allocated == 16:
+        # Create a simple geometric gradient or noise matrix
+        pixel_data = bytes([random.randint(0, 255) for _ in range(total_pixels * 2)])
+    else:
+        # 8-bit array for Ultrasound
+        pixel_data = bytes([random.randint(0, 255) for _ in range(total_pixels)])
+        
+    ds.PixelData = pixel_data
+
+    return ds
 
 def get_next_stream_packet():
     """Generates a comprehensive patient encounter payload containing mandatory vitals
@@ -93,12 +183,25 @@ def get_next_stream_packet():
             "unit": vitals_data["unit"],
             "status": vitals_data["interpretation_display"],
         },
-        "radiology_exam": None,  # Default: No scan ordered for this window
+        "radiology_exam_b64": None,  # Updated to look for the base64 string
     }
 
-    # 3. Clinical probability choice: 60% of patients also had a radiology scan done
+    # # 3. Clinical probability choice: 60% of patients also had a radiology scan done
     if random.random() < 0.60:
-        packet["radiology_exam"] = generate_imaging(triage)
+        modalities = ["CT", "MR", "XR", "US"]
+        chosen_mod = random.choice(modalities)
+        
+        # Generate the safe, synthetic in-memory pydicom object
+        dicom_dataset = generate_synthetic_dicom_in_memory(chosen_mod, rand_id)
+        
+        # Serialize the pydicom object to a binary memory buffer
+        buffer = io.BytesIO()
+        pydicom.dcmwrite(buffer, dicom_dataset)
+        buffer.seek(0)
+        
+        # Encode binary buffer to a safe UTF-8 Base64 string for the JSON payload
+        b64_string = base64.b64encode(buffer.read()).decode('utf-8')
+        packet["radiology_exam_b64"] = b64_string
 
     return packet
 

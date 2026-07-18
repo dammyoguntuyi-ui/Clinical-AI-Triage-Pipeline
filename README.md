@@ -2,13 +2,23 @@
 
 A containerized, resilient, and highly available clinical data ingestion pipeline designed to simulate a real-time hospital environment. The architecture mirrors modern healthtech infrastructure, leveraging an asynchronous streaming microservice feeding a unified frontend dashboard utilizing defensive parsing principles to maintain zero-downtime operations.
 
-## 🩺 Tech Stack & Healthcare Standards
+## 🧬 Tech Stack & Healthcare Standards
 
-* **Language:** Python 3.x
-* **Frontend Framework:** Streamlit (Utilizing advanced state handling and `@st.fragment` scheduling)
-* **Data Layout Standards:** HL7/FHIR v4.0.1 compliance representations (Observation & Bundle schemas)
-* **Imaging Formats:** DICOM Metadata Attribute Extraction Simulation (XR, CT, MR, US modalities)
-* **Data Engineering:** Pandas (In-memory structural ledger manipulation and chronological vector tracking)
+* **Language**: Python 3.x
+* **Frontend Framework**: Streamlit (Utilizing advanced state handling and `@st.fragment` scheduling)
+* **Data Layout Standards**: HL7/FHIR v4.0.1 compliance representations (Observation & Bundle schemas)
+* **Imaging Formats & Engineering**: In-memory binary `pydicom` object generation, serialization, and metadata attribute extraction (XR, CT, MR, US modalities)
+* **Data Engineering**: Pandas (In-memory structural ledger manipulation and chronological vector tracking)
+
+---
+
+## 🚀 Architectural Topology: Live In-Memory Ingestion & Triage Layer
+
+The pipeline operates via a dual-stream data integration framework to process multi-modality patient bundles asynchronously without disk bottlenecks:
+
+* **In-Memory DICOM Generation (`pydicom`)**: The mock streaming microservice dynamically compiles standard-compliant binary medical imaging datasets (spanning CT, MR, XR, and Ultrasound profiles) entirely in-memory using `io.BytesIO`, avoiding performance lags from heavy disk I/O.
+* **Base64 Payload Streaming**: Binary datasets are serialized into safe, network-transportable UTF-8 Base64 strings and packaged inside an enterprise JSON telemetry frame alongside active FHIR-aligned vital signs.
+* **Automated Extraction & AI Classification**: The Streamlit dashboard intercepts the incoming data stream, decodes the binary metadata arrays on the fly to extract matrix resolutions, and pipes the reconstructed pydicom dataset directly into the local `ai_triage` evaluation engine for immediate emergency classification.
 
 ---
 
