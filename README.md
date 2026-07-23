@@ -2,6 +2,14 @@
 
 A containerized, resilient, and highly available clinical data ingestion pipeline designed to simulate a real-time hospital environment. The architecture mirrors modern healthtech infrastructure, leveraging an asynchronous streaming microservice feeding a unified frontend dashboard utilizing defensive parsing principles to maintain zero-downtime operations.
 
+## 🎥 Live System Demo
+
+[![Watch the Demo](https://cdn.loom.com/sessions/thumbnails/531a29bfa65c4d6aa4623eb7eb0c6750-with-play-10000.gif)](https://www.loom.com/share/531a29bfa65c4d6aa4623eb7eb0c6750)
+
+> 💡 **Watch the 2-minute overview** showing in-memory DICOM payload generation, real-time asynchronous streaming, and automated clinical AI triage in action.
+
+---
+
 ## 🧬 Tech Stack & Healthcare Standards
 
 * **Language**: Python 3.x
