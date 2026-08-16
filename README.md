@@ -35,20 +35,23 @@ The pipeline operates via a dual-stream data integration framework to process mu
 The following diagram illustrates how the components interact across the isolated virtual bridge network, highlighting the native socket-based health telemetry monitoring:
 
 ```mermaid
-graph TD
-    subgraph Host["Host Machine (WSL / Docker Environment)"]
-        Browser["Local Web Browser<br/>localhost:8501"] <-->|"Port Mapping :8501"| Dashboard
+flowchart TD
+    subgraph Host["Host Machine (Docker Environment)"]
+        Browser["Local Web Browser<br/>localhost:8501"]
         
         subgraph Bridge["Isolated Bridge Network (clinical_triage_net)"]
-            Streamer["Asynchronous Telemetry Streamer<br/>clinical_mock_streamer"]
-            Dashboard["Streamlit Frontend Dashboard<br/>clinical_triage_dashboard"]
+            Streamer["Asynchronous Telemetry Streamer<br/>(clinical_mock_streamer)"]
+            Parser["Parser & Extraction Engine<br/>(pydicom / hl7)"]
+            Engine["Clinical AI Triage Engine<br/>(ai_triage.py)"]
+            Dashboard["Streamlit Frontend Dashboard<br/>(clinical_triage_dashboard)"]
             
-            Streamer -->|"FHIR-Compliant Bundles & HL7/DICOM Payloads"| Parser["Parser & Extraction<br/>(pydicom / hl7)"]
-            Parser -->|"Structured Features"| Engine["AI Triage Engine<br/>(ai_triage.py)"]
-            Engine -->|"Prioritized Risk Scores"| Dashboard
-            
-            Dashboard -.->|"Native Python Socket Ping<br/>Port 5000 Health Check"| Streamer
+            Streamer -->|"FHIR Bundles & HL7/DICOM Payloads"| Parser
+            Parser -->|"Structured Clinical Features"| Engine
+            Engine -->|"Prioritized Risk Scores & Alerts"| Dashboard
+            Dashboard -.->|"Python Socket Ping :5000 Health Check"| Streamer
         end
+        
+        Dashboard <==>|"Port Mapping :8501"| Browser
     end
 
     style Browser fill:#f9f,stroke:#333,stroke-width:2px,color:#111
