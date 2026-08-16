@@ -36,21 +36,26 @@ The following diagram illustrates how the components interact across the isolate
 
 ```mermaid
 graph TD
-    subgraph "Host Machine (WSL / Docker Environment)"
-        Browser["Local Web Browser<br>localhost:8501"] <--> |"Port Mapping 8501"| Dashboard
+    subgraph Host["Host Machine (WSL / Docker Environment)"]
+        Browser["Local Web Browser<br/>localhost:8501"] <-->|"Port Mapping :8501"| Dashboard
         
-        subgraph "Isolated Bridge Network (clinical_triage_net)"
-            Dashboard["Streamlit Frontend Dashboard<br>clinical_triage_dashboard"]
-            Streamer["Asynchronous Telemetry Streamer<br>clinical_mock_streamer"]
+        subgraph Bridge["Isolated Bridge Network (clinical_triage_net)"]
+            Streamer["Asynchronous Telemetry Streamer<br/>clinical_mock_streamer"]
+            Dashboard["Streamlit Frontend Dashboard<br/>clinical_triage_dashboard"]
             
-            Dashboard -.-> |"Native Python Socket Ping<br>Port 5000 Health Check"| Streamer
-            Streamer ===> |"FHIR-Compliant Bundles"| Dashboard
+            Streamer -->|"FHIR-Compliant Bundles & HL7/DICOM Payloads"| Parser["Parser & Extraction<br/>(pydicom / hl7)"]
+            Parser -->|"Structured Features"| Engine["AI Triage Engine<br/>(ai_triage.py)"]
+            Engine -->|"Prioritized Risk Scores"| Dashboard
+            
+            Dashboard -.->|"Native Python Socket Ping<br/>Port 5000 Health Check"| Streamer
         end
     end
 
     style Browser fill:#f9f,stroke:#333,stroke-width:2px,color:#111
     style Dashboard fill:#bbf,stroke:#333,stroke-width:2px,color:#111
     style Streamer fill:#bfb,stroke:#333,stroke-width:2px,color:#111
+    style Parser fill:#e2e8f0,stroke:#475569,stroke-width:1.5px,color:#0f172a
+    style Engine fill:#fed7aa,stroke:#ea580c,stroke-width:1.5px,color:#7c2d12
 ```
 
 ## 🛠️ Core Features & Engineering Highlights
