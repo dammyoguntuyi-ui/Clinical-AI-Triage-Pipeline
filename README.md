@@ -36,29 +36,38 @@ The following diagram illustrates how the components interact across the isolate
 
 ```mermaid
 flowchart TD
-    subgraph Host["Host Machine (Docker Environment)"]
-        Browser["Local Web Browser<br/>localhost:8501"]
-        
-        subgraph Bridge["Isolated Bridge Network (clinical_triage_net)"]
-            Streamer["Asynchronous Telemetry Streamer<br/>(clinical_mock_streamer)"]
-            Parser["Parser & Extraction Engine<br/>(pydicom / hl7)"]
-            Engine["Clinical AI Triage Engine<br/>(ai_triage.py)"]
-            Dashboard["Streamlit Frontend Dashboard<br/>(clinical_triage_dashboard)"]
-            
-            Streamer -->|"FHIR Bundles & HL7/DICOM Payloads"| Parser
-            Parser -->|"Structured Clinical Features"| Engine
-            Engine -->|"Prioritized Risk Scores & Alerts"| Dashboard
-            Dashboard -.->|"Python Socket Ping :5000 Health Check"| Streamer
-        end
-        
-        Dashboard <==>|"Port Mapping :8501"| Browser
+    subgraph Client["Host & Client Access"]
+        Browser["🖥️ Local Web Browser<br/><code>http://localhost:8501</code>"]
     end
 
-    style Browser fill:#f9f,stroke:#333,stroke-width:2px,color:#111
-    style Dashboard fill:#bbf,stroke:#333,stroke-width:2px,color:#111
-    style Streamer fill:#bfb,stroke:#333,stroke-width:2px,color:#111
-    style Parser fill:#e2e8f0,stroke:#475569,stroke-width:1.5px,color:#0f172a
-    style Engine fill:#fed7aa,stroke:#ea580c,stroke-width:1.5px,color:#7c2d12
+    subgraph Network["Isolated Docker Bridge Network (clinical_triage_net)"]
+        Streamer["📡 Asynchronous Telemetry Streamer<br/><code>clinical_mock_streamer</code>"]
+        
+        Parser["⚙️ Parser & Ingestion Engine<br/><code>pydicom</code> | <code>hl7</code>"]
+        
+        Engine["🧠 Clinical AI Triage Engine<br/><code>ai_triage.py</code>"]
+        
+        Dashboard["📊 Streamlit Frontend Dashboard<br/><code>clinical_triage_dashboard</code>"]
+        
+        Streamer -->|"FHIR Bundles & HL7/DICOM Payloads"| Parser
+        Parser -->|"Structured Clinical Features"| Engine
+        Engine -->|"Prioritized Risk Scores & Emergency Flags"| Dashboard
+        Dashboard -.->|"Python Socket Ping (:5000 Health Check)"| Streamer
+    end
+
+    Dashboard <==>|"Port Mapping (:8501)"| Browser
+
+    classDef client fill:#3b82f6,stroke:#1d4ed8,stroke-width:2px,color:#fff;
+    classDef streamer fill:#10b981,stroke:#047857,stroke-width:2px,color:#fff;
+    classDef engine fill:#f59e0b,stroke:#b45309,stroke-width:2px,color:#fff;
+    classDef dash fill:#6366f1,stroke:#4338ca,stroke-width:2px,color:#fff;
+    classDef parser fill:#475569,stroke:#334155,stroke-width:2px,color:#fff;
+
+    class Browser client;
+    class Streamer streamer;
+    class Parser parser;
+    class Engine engine;
+    class Dashboard dash;
 ```
 
 ## 🛠️ Core Features & Engineering Highlights
