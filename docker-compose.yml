@@ -16,10 +16,25 @@ services:
     healthcheck:
       # Uses Python directly to test if port 5000 is open and accepting connections
       test: ["CMD", "python", "-c", "import socket; s = socket.socket(); s.connect(('127.0.0.1', 5000))"]
-      interval: 5s     # Checks every 5 seconds to accelerate the initial dashboard boot time
+      interval: 5s
       timeout: 3s
       retries: 3
       start_period: 5s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clinical_api_service
+    # Runs the FastAPI FHIR ingestion and telemetry microservice
+    command: uvicorn api:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    networks:
+      - clinical_triage_net
+    restart: always
 
   frontend_dashboard:
     build:
@@ -37,6 +52,9 @@ services:
     depends_on:
       mock_streamer:
         condition: service_healthy
+      api:
+        condition: service_started
+    restart: always
 
 networks:
   clinical_triage_net:
