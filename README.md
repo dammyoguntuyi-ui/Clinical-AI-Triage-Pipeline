@@ -1,4 +1,5 @@
 # Enterprise Multi-Modality Clinical AI Triage Pipeline
+[![Clinical AI Pipeline CI](https://github.com/dammyoguntuyi-ui/Clinical-AI-Triage-Pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/dammyoguntuyi-ui/Clinical-AI-Triage-Pipeline/actions/workflows/ci.yml)
 
 A containerized, resilient, and highly available clinical data ingestion pipeline designed to simulate a real-time hospital environment. The architecture mirrors modern healthtech infrastructure, leveraging an asynchronous streaming microservice feeding a unified frontend dashboard utilizing defensive parsing principles to maintain zero-downtime operations.
 
