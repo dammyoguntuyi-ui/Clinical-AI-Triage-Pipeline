@@ -14,10 +14,11 @@ A containerized, resilient, and highly available clinical data ingestion pipelin
 ## 🧬 Tech Stack & Healthcare Standards
 
 * **Language**: Python 3.x
+* **Backend & API Layer**: FastAPI (RESTful FHIR R4 ingestion, Pydantic data validation, `/health` & `/metrics` telemetry endpoints)
 * **Frontend Framework**: Streamlit (Utilizing advanced state handling and `@st.fragment` scheduling)
 * **Data Layout Standards**: HL7/FHIR v4.0.1 compliance representations (Observation & Bundle schemas)
 * **Imaging Formats & Engineering**: In-memory binary `pydicom` object generation, serialization, and metadata attribute extraction (XR, CT, MR, US modalities)
-* **Data Engineering**: Pandas (In-memory structural ledger manipulation and chronological vector tracking)
+* **Data Engineering**: Pandas & SQLite (In-memory structural ledger manipulation and chronological vector tracking)
 
 ---
 
@@ -38,25 +39,25 @@ The following diagram illustrates how the components interact across the isolate
 ```mermaid
 flowchart TD
     subgraph Client["Host & Client Access"]
-        Browser["🖥️ Local Web Browser<br/><code>http://localhost:8501</code>"]
+        BrowserUI["🖥️ Clinical Dashboard UI<br/><code>http://localhost:8501</code>"]
+        APIClient["⚡ FHIR REST Client / Swagger Docs<br/><code>http://localhost:8000/docs</code>"]
     end
 
     subgraph Network["Isolated Docker Bridge Network (clinical_triage_net)"]
         Streamer["📡 Asynchronous Telemetry Streamer<br/><code>clinical_mock_streamer</code>"]
-        
+        APIService["⚡ FastAPI FHIR Microservice<br/><code>clinical_api_service</code>"]
         Parser["⚙️ Parser & Ingestion Engine<br/><code>pydicom</code> | <code>hl7</code>"]
-        
         Engine["🧠 Clinical AI Triage Engine<br/><code>ai_triage.py</code>"]
-        
         Dashboard["📊 Streamlit Frontend Dashboard<br/><code>clinical_triage_dashboard</code>"]
-        
+
         Streamer -->|"FHIR Bundles & HL7/DICOM Payloads"| Parser
         Parser -->|"Structured Clinical Features"| Engine
         Engine -->|"Prioritized Risk Scores & Emergency Flags"| Dashboard
         Dashboard -.->|"Python Socket Ping (:5000 Health Check)"| Streamer
     end
 
-    Dashboard <==>|"Port Mapping (:8501)"| Browser
+    BrowserUI <==>|"Port Mapping (:8501)"| Dashboard
+    APIClient <==>|"Port Mapping (:8000)"| APIService
 
     classDef client fill:#3b82f6,stroke:#1d4ed8,stroke-width:2px,color:#fff;
     classDef streamer fill:#10b981,stroke:#047857,stroke-width:2px,color:#fff;
@@ -70,6 +71,32 @@ flowchart TD
     class Engine engine;
     class Dashboard dash;
 ```
+---
+
+## 🚀 Production Microservices & Endpoints
+
+The pipeline runs a containerized, multi-service architecture orchestrated via Docker Compose:
+
+| Service | Port | Protocol | Description |
+| :--- | :--- | :--- | :--- |
+| **FastAPI Ingestion Engine** | `:8000` | HTTP / REST | Ingests FHIR R4 Bundles, executes defensive DICOM parsing, and reports telemetry. |
+| **Streamlit Clinical UI** | `:8501` | HTTP / WebSocket | Real-time multi-modality clinical ledger and live triage monitoring. |
+| **Telemetry Streamer** | Internal | Python Socket / IPC | Simulates asynchronous DICOM binary headers and physiological bedside telemetry. |
+
+### API Route Specifications (FastAPI)
+* `POST /api/v1/fhir/Bundle` — Ingests multimodal FHIR bundles with automated triage scoring and base64 DICOM decoding.
+* `GET /health` — Automated container uptime and SQLite database reachability checks.
+* `GET /metrics` — Live telemetry metrics reporting ingested case distribution and triage counts.
+* `GET /docs` — Interactive OpenAPI / Swagger UI documentation and testing interface.
+
+### Automated Testing & CI/CD
+* Comprehensive unit and integration test suite (`pytest`, `TestClient`) covering:
+  * DICOM byte parsing and defensive header fallbacks.
+  * Physiological triage threshold scoring logic.
+  * REST API routing, payload validation, and telemetry endpoints.
+* Automated CI workflow on push via **GitHub Actions**.
+
+---
 
 ## 🛠️ Core Features & Engineering Highlights
 
@@ -117,7 +144,10 @@ To spin up the isolated, fully decoupled microservice architecture:
 ```Bash
 docker-compose up --build
 ```
-Once the container layers initialize, open your browser to the exposed frontend interface port: http://localhost:8501.
+Once the container layers initialize, open your browser to access the exposed services:
+
+* **Streamlit Clinical Dashboard UI:** [http://localhost:8501](http://localhost:8501)
+* **FastAPI Swagger / OpenAPI Interface & Health/Metrics:** [http://localhost:8000/docs](http://localhost:8000/docs)
 
 To cleanly stop the containers and release the isolated virtual network bridges, run:
 
