@@ -148,16 +148,6 @@ To verify core data validation logic, multi-modality QA rules, and FHIR dispatch
 ```Bash
 docker compose exec api pytest -v
 ```
-Once the container layers initialize, open your browser to access the exposed services:
-
-* **Streamlit Clinical Dashboard UI:** [http://localhost:8501](http://localhost:8501)
-* **FastAPI Swagger / OpenAPI Interface & Health/Metrics:** [http://localhost:8000/docs](http://localhost:8000/docs)
-
-To cleanly stop the containers and release the isolated virtual network bridges, run:
-
-```Bash
-docker-compose down
-```
 
 ---
 
