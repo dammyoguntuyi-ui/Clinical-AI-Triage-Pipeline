@@ -124,11 +124,14 @@ class ImageQualityEvaluator:
             rejection_reasons.extend(ood_reasons)
 
         except Exception as e:
+            rejection_reasons.append(f"Pixel decompression error: {str(e)}")
             return QAEvaluationResult(
                 is_valid=False,
-                rejection_reasons=[f"Pixel decompression error: {str(e)}"],
+                rejection_reasons=rejection_reasons,
                 snr_db=0.0,
                 cnr=0.0,
+                slice_thickness_mm=slice_thickness,
+                photometric_interpretation=photo_interp,
                 ood_detected=True,
             )
 
