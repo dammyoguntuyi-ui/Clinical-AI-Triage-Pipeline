@@ -1,9 +1,10 @@
 import sqlite3
 import time
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
+from qa_evaluator import ClinicalMetricsAuditor, ClinicalEvaluationMetrics
 
 # Import existing core parsing logic from app.py
 from app import process_unified_clinical_packet
@@ -126,3 +127,22 @@ def ingest_fhir_bundle(packet: FHIRBundlePayload) -> Dict[str, Any]:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal processing exception: {str(exc)}"
         )
+
+
+class EvaluationPayload(BaseModel):
+    y_true: List[int]
+    y_pred: List[int]
+    tier: str = "Emergency"  # Emergency, Urgent, or Routine
+    beta: float = 2.0
+
+@app.post("/metrics/evaluate", response_model=ClinicalEvaluationMetrics, tags=["Quality & Metrics"])
+async def evaluate_clinical_metrics(payload: EvaluationPayload):
+    if len(payload.y_true) != len(payload.y_pred):
+        raise HTTPException(status_code=400, detail="Ground truth and predictions must be equal length.")
+
+    return ClinicalMetricsAuditor.calculate_metrics(
+        y_true=payload.y_true,
+        y_pred=payload.y_pred,
+        tier=payload.tier,
+        beta=payload.beta,
+    )
