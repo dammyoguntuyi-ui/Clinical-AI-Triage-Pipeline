@@ -1,292 +1,260 @@
-import os
-import sys
-import io
-import base64
-import pydicom
-import numpy as np
+"""
+app.py - Enterprise Clinical AI Triage Dashboard & Multimodal Governance Console
+Integrates live vitals telemetry streaming, pre-inference DICOM QA gating,
+asymmetric clinical loss evaluation, and downstream FHIR R4 dispatching.
+"""
+
+import datetime
+import random
+import time
+from typing import Dict, Any
+
 import pandas as pd
+import pydicom
 import streamlit as st
-import socket
 
-from qa_evaluator import ImageQualityEvaluator, ClinicalMetricsAuditor
+from enterprise_engine import EnterpriseHospitalEngine
+from qa_evaluator import ClinicalMetricsAuditor
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-from scripts.mock_streamer import get_next_stream_packet
-from scripts.ai_triage import evaluate_imaging_finding
-
-
-# =========================================================
-# INFRASTRUCTURE NETWORK RESILIENCY CHECK
-# =========================================================
-def check_streamer_network_resilience(host="clinical_mock_streamer", port=5000):
-    """
-    Validates internal container network bridge connection before pulling data stream.
-    Prevents port binding timeouts and unhandled infrastructure crashes.
-    """
-    try:
-        host_ip = socket.gethostbyname(host)
-        with socket.create_connection((host_ip, port), timeout=2):
-            return True
-    except (socket.gaierror, socket.timeout, ConnectionRefusedError):
-        return False
-
-
-# --- PAGE SETUP ---
+# --- PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="Unified Multi-Modality AI Triage",
+    page_title="Enterprise Clinical AI Triage",
+    page_icon="🫁",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-st.title("🫁 Enterprise Multi-Modality AI Clinical Triage Dashboard")
-st.subheader("Aggregated Data Stream: Correlating Live FHIR Telemetry & DICOM Imaging Analytics")
-st.markdown("---")
+# --- SESSION STATE INITIALIZATION ---
+if "enterprise_engine" not in st.session_state:
+    st.session_state.enterprise_engine = EnterpriseHospitalEngine()
 
+if "dispatched_fhir_logs" not in st.session_state:
+    st.session_state.dispatched_fhir_logs = []
 
-# --- UNIFIED PARSING COMPONENT ---
-def process_unified_clinical_packet(data):
-    """Processes aggregated patient data bundles seamlessly with detailed imaging tracking."""
-    try:
-        vitals = data["vitals_telemetry"]
-        b64_imaging_data = data.get("radiology_exam_b64")
+if "quarantined_studies_logs" not in st.session_state:
+    st.session_state.quarantined_studies_logs = []
 
-        # Handle binary pydicom parsing layer safely if present
-        if b64_imaging_data:
-            try:
-                dicom_bytes = base64.b64decode(b64_imaging_data)
-                dicom_buffer = io.BytesIO(dicom_bytes)
-                dicom_obj = pydicom.dcmread(dicom_buffer)
-
-                # Extract real attributes from DICOM object layout
-                modality = dicom_obj.get("Modality", "UNKNOWN")
-                patient_id = dicom_obj.get("PatientID", "UNKNOWN-ID")
-                accession = dicom_obj.get("AccessionNumber", "N/A")
-
-                rows = dicom_obj.get("Rows", 0)
-                cols = dicom_obj.get("Columns", 0)
-                resolution_str = f"{rows}x{cols}" if rows and cols else "Unknown Matrix"
-
-                has_imaging = "Yes"
-                modality_info = f"{modality} ({resolution_str})"
-
-                # Dynamic inference execution from local AI evaluation module
-                findings = evaluate_imaging_finding(dicom_obj)
-                raw_dump = f"Modality: {modality} | Accession: {accession} | SOP_UID: {dicom_obj.SOPInstanceUID}"
-            except Exception as e:
-                has_imaging = "Corrupted Payload"
-                modality_info = "Parsing Failure"
-                findings = "AI Inference Failure"
-                raw_dump = f"Parsing Error: {str(e)}"
-        else:
-            has_imaging = "No"
-            modality_info = "None Ordered"
-            findings = "N/A"
-            raw_dump = "N/A"
-
-        return {
-            "Timestamp": data.get("timestamp"),
-            "Patient ID": data.get("patient_id"),
-            "SpO2 Vitals": f"{vitals['value']}{vitals['unit']} ({vitals['status']})",
-            "Has Imaging": has_imaging,
-            "Imaging Modality": modality_info,
-            "AI Radiology Findings": findings,
-            "Triage Level": data.get("triage_status"),
-            "Raw Image Dump": raw_dump,
-            "Numeric SpO2": int(vitals["value"]),
-        }
-    except KeyError as e:
-        st.error(f"Error parsing aggregated data schema: {e}")
-        return None
-
-
-# --- STATE MANAGEMENT ---
 if "clinical_history" not in st.session_state:
+    # Seed initial mock data history
+    now = datetime.datetime.now(datetime.timezone.utc)
     st.session_state.clinical_history = pd.DataFrame(
-        columns=[
-            "Timestamp",
-            "Patient ID",
-            "SpO2 Vitals",
-            "Has Imaging",
-            "Imaging Modality",
-            "AI Radiology Findings",
-            "Triage Level",
-            "Raw Image Dump",
-            "Numeric SpO2",
+        [
+            {
+                "Timestamp": (now - datetime.timedelta(seconds=i * 20)).isoformat(),
+                "Patient ID": f"pat-{random.randint(1000, 9999)}",
+                "SpO2 Vitals": f"{random.randint(88, 99)}% (Normal)" if i % 2 == 0 else f"{random.randint(78, 86)}% (Low)",
+                "Heart Rate (BPM)": random.randint(65, 110),
+                "Triage Urgency": "Emergency" if i % 3 == 0 else ("Urgent" if i % 2 == 0 else "Routine"),
+            }
+            for i in range(5)
         ]
     )
 
 
-# --- SIDEBAR CONTROL PANEL ---
-st.sidebar.header("Orchestration Router")
-st.sidebar.success("🟢 Aggregator Layer Online")
-st.sidebar.info("Ingesting aggregated clinical bundles. Bedside vitals streams are now explicitly mapped alongside radiology imaging data vectors.")
+# --- SIMULATION HELPERS ---
+def get_next_stream_packet() -> Dict[str, Any]:
+    """Generates a mock incoming bedside telemetry packet."""
+    spo2_val = random.randint(76, 100)
+    spo2_label = f"{spo2_val}% (Normal)" if spo2_val >= 92 else f"{spo2_val}% (Low)"
+    patient_num = random.randint(1000, 9999)
+    return {
+        "Timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "Patient ID": f"pat-{patient_num}",
+        "SpO2 Vitals": spo2_label,
+        "Heart Rate (BPM)": random.randint(60, 125),
+        "Triage Urgency": "Emergency" if spo2_val < 85 else ("Urgent" if spo2_val < 92 else "Routine"),
+    }
 
-if st.sidebar.button("🗑️ Clear Local Log Cache", use_container_width=True):
-    st.session_state.clinical_history = pd.DataFrame(
-        columns=[
-            "Timestamp",
-            "Patient ID",
-            "SpO2 Vitals",
-            "Has Imaging",
-            "Imaging Modality",
-            "AI Radiology Findings",
-            "Triage Level",
-            "Raw Image Dump",
-            "Numeric SpO2",
-        ]
-    )
+
+# --- SIDEBAR: ORCHESTRATION ROUTER ---
+st.sidebar.title("Orchestration Router")
+st.sidebar.success("🌐 Aggregator Layer Online")
+
+st.sidebar.info(
+    "Ingesting aggregated clinical bundles. Bedside vitals streams are explicitly mapped "
+    "alongside radiology imaging data vectors."
+)
+
+if st.sidebar.button("🗑️ Clear Local Log Cache"):
+    st.session_state.dispatched_fhir_logs = []
+    st.session_state.quarantined_studies_logs = []
     st.rerun()
 
-# --- PRE-INFERENCE QA & ANOMALY DETECTION ---
+
+# --- SIDEBAR: PRE-INFERENCE QA & ANOMALY DETECTION ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("🛡️ Pre-Inference DICOM QA Gate")
-uploaded_dcm = st.sidebar.file_uploader("Audit DICOM Acquisition", type=["dcm"], key="qa_dcm_uploader")
+uploaded_dcm = st.sidebar.file_uploader(
+    "Audit DICOM Acquisition", type=["dcm"], key="qa_dcm_uploader"
+)
 
 if uploaded_dcm:
     dcm = pydicom.dcmread(uploaded_dcm)
-    evaluator = ImageQualityEvaluator()
-    qa_result = evaluator.evaluate_dicom(dcm)
+
+    # Extract latest live vitals from session state if present
+    latest_vitals = {"spo2": 97.0, "patient_id": getattr(dcm, "PatientID", "pat-7577")}
+    if not st.session_state.clinical_history.empty:
+        latest_row = st.session_state.clinical_history.iloc[0]
+        raw_spo2 = str(latest_row.get("SpO2 Vitals", "97")).split("%")[0]
+        try:
+            latest_vitals["spo2"] = float(raw_spo2)
+        except ValueError:
+            latest_vitals["spo2"] = 97.0
+        latest_vitals["patient_id"] = str(
+            latest_row.get("Patient ID", latest_vitals["patient_id"])
+        )
+
+    process_result = st.session_state.enterprise_engine.process_clinical_study(
+        dcm, latest_vitals
+    )
+    qa_res = process_result["qa_result"]
 
     c1, c2 = st.sidebar.columns(2)
-    c1.metric("SNR (dB)", f"{qa_result.snr_db} dB", delta="Optimal" if qa_result.snr_db >= 12 else "Low")
-    c2.metric("CNR", f"{qa_result.cnr}")
+    c1.metric(
+        "SNR (dB)",
+        f"{qa_res.snr_db} dB",
+        delta="Optimal" if qa_res.snr_db >= 8.0 else "Low",
+    )
+    c2.metric("CNR", f"{qa_res.cnr}")
 
-    if qa_result.is_valid:
-        st.sidebar.success("✅ QA Passed: Ingestion Compliant")
+    if process_result["outcome"] == "DISPATCHED":
+        st.sidebar.success("✅ QA Passed: Ingestion & Dispatch Compliant")
+        if not any(
+            d["patient_id"] == process_result["payload"]["patient_id"]
+            for d in st.session_state.dispatched_fhir_logs
+        ):
+            st.session_state.dispatched_fhir_logs.insert(0, process_result["payload"])
     else:
-        st.sidebar.error(f"❌ Rejected: {', '.join(qa_result.rejection_reasons)}")
+        st.sidebar.error(f"❌ Rejected: {process_result['payload']['rejection_reasons']}")
+        if not any(
+            q["patient_id"] == process_result["payload"]["patient_id"]
+            for q in st.session_state.quarantined_studies_logs
+        ):
+            st.session_state.quarantined_studies_logs.insert(
+                0, process_result["payload"]
+            )
 
-# --- CLINICAL SAFETY & LOSS CALIBRATION ---
+
+# --- SIDEBAR: CLINICAL SAFETY & LOSS CALIBRATION ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("📊 Clinical Safety Metric (β=2)")
 tier = st.sidebar.radio(
     "Auditing Urgency Tier",
     ["Emergency", "Urgent", "Routine"],
     horizontal=True,
-    key="metrics_tier_select"
+    key="metrics_tier_select",
 )
 
-# Dynamic ground truth distributions & loss parameters per clinical tier
 tier_benchmarks = {
     "Emergency": {
         "y_true": [1, 1, 1, 1, 0, 0, 1, 0, 1, 0],
-        "y_pred": [1, 1, 1, 0, 0, 0, 1, 0, 1, 1],  # Optimized for extreme recall (FN penalized)
-        "beta": 2.0
+        "y_pred": [1, 1, 1, 0, 0, 0, 1, 0, 1, 1],
+        "beta": 2.0,
     },
     "Urgent": {
         "y_true": [1, 1, 0, 0, 1, 0, 1, 0, 0, 1],
-        "y_pred": [1, 1, 0, 0, 1, 0, 0, 0, 0, 1],  # Balanced triage profile
-        "beta": 1.5
+        "y_pred": [1, 1, 0, 0, 1, 0, 0, 0, 0, 1],
+        "beta": 1.5,
     },
     "Routine": {
         "y_true": [0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
-        "y_pred": [0, 0, 1, 0, 0, 0, 1, 0, 0, 0],  # High specificity, zero false alarms
-        "beta": 1.0
-    }
+        "y_pred": [0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+        "beta": 1.0,
+    },
 }
 
 cohort = tier_benchmarks[tier]
 metrics = ClinicalMetricsAuditor.calculate_metrics(
-    y_true=cohort["y_true"],
-    y_pred=cohort["y_pred"],
-    tier=tier,
-    beta=cohort["beta"]
+    cohort["y_true"], cohort["y_pred"], tier=tier, beta=cohort["beta"]
 )
 
 mc1, mc2 = st.sidebar.columns(2)
 mc1.metric("Sensitivity", f"{metrics.sensitivity * 100:.1f}%")
-mc2.metric("F2 Safety" if tier == "Emergency" else f"F{cohort['beta']} Score", f"{metrics.f2_score:.3f}")
+mc2.metric(
+    "F2 Safety" if tier == "Emergency" else f"F{cohort['beta']} Score",
+    f"{metrics.f2_score:.3f}",
+)
 st.sidebar.caption(f"Alarm Fatigue: {metrics.alarm_fatigue_rate * 100:.1f}% (FP Rate)")
 
-# --- AUTOMATED MIXED STREAM ENGINE FRAGMENT ---
+
+# --- MAIN VIEW: ENTERPRISE TELEMETRY STREAM & AUDIT DASHBOARD ---
+st.title("🫁 Enterprise Clinical AI Triage Dashboard")
+st.markdown("#### Aggregated Data Streams & Multimodal Governance Engine")
+
+# --- LIVE TELEMETRY FRAGMENT (AUTO-POLL EVERY 20s) ---
 @st.fragment(run_every=20)
 def automated_clinical_stream():
     """Polls aggregated clinical bundles every 20 seconds hands-free."""
-    if check_streamer_network_resilience():
-        raw_packet = get_next_stream_packet()
-        parsed_frame = process_unified_clinical_packet(raw_packet)
+    new_packet = get_next_stream_packet()
+    new_row = pd.DataFrame([new_packet])
+    st.session_state.clinical_history = pd.concat(
+        [new_row, st.session_state.clinical_history], ignore_index=True
+    ).head(30)
 
-        if parsed_frame:
-            new_row = pd.DataFrame([parsed_frame])
-            st.session_state.clinical_history = pd.concat(
-                [new_row, st.session_state.clinical_history], ignore_index=True
-            )
+    latest = st.session_state.clinical_history.iloc[0]
 
-        if not st.session_state.clinical_history.empty:
-            latest_entry = st.session_state.clinical_history.iloc[0]
+    # Active Target Vitals Banner
+    col_t1, col_t2, col_t3 = st.columns(3)
+    col_t1.metric("Active Target Patient ID", str(latest["Patient ID"]))
+    col_t2.metric("Current SpO2 Vitals", str(latest["SpO2 Vitals"]))
+    col_t3.metric("Assigned Stream Triage", str(latest["Triage Urgency"]))
 
-            # Display Top Panel Metrics
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                st.metric(label="Active Target Patient ID", value=latest_entry["Patient ID"])
-            with c2:
-                st.metric(label="Current Bedside Vitals Stream", value=latest_entry["SpO2 Vitals"])
-            with c3:
-                is_critical = latest_entry["Triage Level"] == "CRITICAL"
-                status_symbol = "💥 HIGH PRIORITY" if is_critical else "🟢 Stable"
-                st.metric(
-                    label="Encounter Priority State",
-                    value=latest_entry["Triage Level"],
-                    delta=status_symbol,
-                    delta_color="inverse" if is_critical else "normal",
-                )
-
-            st.markdown("---")
-            left_layout, right_layout = st.columns([4, 3])
-
-            with left_layout:
-                st.markdown("### 📋 Aggregated Master Clinical Ledger")
-                st.markdown("*Hide technical plotting columns from display grid*")
-                display_df = st.session_state.clinical_history.drop(
-                    columns=["Raw Image Dump", "Numeric SpO2"]
-                )
-                st.dataframe(display_df, use_container_width=True)
-
-                st.markdown("### 📈 Continuous Patient Vitals Trend (All Ingested Cases)")
-                chart_data = st.session_state.clinical_history.iloc[::-1].reset_index()
-                st.line_chart(data=chart_data, x="Timestamp", y="Numeric SpO2")
-
-            with right_layout:
-                st.markdown("### 🔬 Diagnostics Inspection Frame")
-                if not st.session_state.clinical_history.empty:
-                    if latest_entry["Has Imaging"] == "Yes":
-                        modality_label = latest_entry["Imaging Modality"].split(" ")[0].replace("(", "").replace(")", "")
-                        st.info(f"**RadAI Diagnostics Output:** {latest_entry['AI Radiology Findings']}")
-
-                        is_pathology_detected = any(
-                            keyword in latest_entry["AI Radiology Findings"]
-                            for keyword in ["Hemorrhage", "Mass", "Fracture", "Abnormality"]
-                        )
-
-                        if is_pathology_detected:
-                            st.error(f"🚨 PATHOLOGY ALARM: Critical emergency indicators identified within the live {modality_label} capture.")
-                            st.image(
-                                f"https://placehold.co/400x300/4a0000/ffffff?text=CRITICAL+({modality_label})",
-                                caption=f"PACS Frame Instance - Diagnostic {modality_label} Series",
-                                use_container_width=True,
-                            )
-                        else:
-                            st.success(f"🟢 RADIOLOGY CLEAR: Routine anatomical parameters mapped on {modality_label}.")
-                            st.image(
-                                f"https://placehold.co/400x300/004a11/ffffff?text=ROUTINE+({modality_label})",
-                                caption=f"PACS Frame Instance - Diagnostic {modality_label} Series",
-                                use_container_width=True,
-                            )
-                    else:
-                        st.warning("⚠️ No diagnostic radiology exams were scheduled or ordered for this encounter window. Bedside monitoring remains ongoing.")
-        else:
-            st.info("Awaiting the initial aggregated multi-modality pipeline packet...")
-    else:
-        # Graceful UI degradation fallback if container goes unhealthy
-        st.error("🚨 Infrastructure Alert: Connection to Modality Telemetry Engine lost")
-        st.warning(
-            "The background streaming engine ('mock_streamer.py') is currently unreachable. "
-            "The system network bridge is attempting automated self-healing. Retrying connection..."
-        )
-        st.info("Awaiting structural metadata streams to resume triage visualization.")
+    st.markdown("---")
+    st.subheader("📋 Aggregated Master Clinical Ledger")
+    st.dataframe(st.session_state.clinical_history, use_container_width=True)
 
 
-# --- RUN PIPELINE ---
-st.markdown("### 🌐 Live Stream Processing Pipeline")
 automated_clinical_stream()
+
+# --- MAIN VIEW: ENTERPRISE AUDIT & DISPATCH CONSOLE ---
+st.markdown("---")
+st.subheader("🏥 Enterprise Triage & Clinical Governance Logs")
+tab1, tab2 = st.tabs(
+    ["🚀 Dispatched FHIR R4 DiagnosticReports", "⚠️ Quarantined Dead-Letter Studies"]
+)
+
+with tab1:
+    if st.session_state.dispatched_fhir_logs:
+        df_dispatched = pd.DataFrame(
+            [
+                {
+                    "Timestamp": l["timestamp"],
+                    "Patient ID": l["patient_id"],
+                    "Modality": l["modality"],
+                    "Urgency Tier": l["urgency_tier"],
+                    "SNR (dB)": l["snr_db"],
+                    "CNR": l["cnr"],
+                    "Status": l["status"],
+                }
+                for l in st.session_state.dispatched_fhir_logs
+            ]
+        )
+        st.dataframe(df_dispatched, use_container_width=True)
+
+        with st.expander("🔍 Inspect Latest Dispatched FHIR R4 JSON Bundle"):
+            st.json(st.session_state.dispatched_fhir_logs[0]["fhir_payload"])
+    else:
+        st.info(
+            "No compliant studies dispatched yet. Upload a valid DICOM acquisition in the sidebar to trigger triage."
+        )
+
+with tab2:
+    if st.session_state.quarantined_studies_logs:
+        df_quarantined = pd.DataFrame(
+            [
+                {
+                    "Timestamp": q["timestamp"],
+                    "Patient ID": q["patient_id"],
+                    "Modality": q["modality"],
+                    "Rejection Reasons": q["rejection_reasons"],
+                    "Error Code": q["hl7_error_code"],
+                    "Status": q["status"],
+                }
+                for q in st.session_state.quarantined_studies_logs
+            ]
+        )
+        st.dataframe(df_quarantined, use_container_width=True)
+    else:
+        st.success(
+            "Dead-Letter Queue clear: No non-compliant or corrupted acquisitions detected."
+        )
