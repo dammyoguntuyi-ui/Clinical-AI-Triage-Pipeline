@@ -1,11 +1,16 @@
 # Enterprise Multi-Modality Clinical AI Triage Pipeline
-[![Clinical AI Pipeline CI](https://github.com/dammyoguntuyi-ui/Clinical-AI-Triage-Pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/dammyoguntuyi-ui/Clinical-AI-Triage-Pipeline/actions/workflows/ci.yml)
 
-A containerized, resilient, and highly available clinical data ingestion pipeline designed to simulate a real-time hospital environment. The architecture mirrors modern healthtech infrastructure, leveraging an asynchronous streaming microservice feeding a unified frontend dashboard utilizing defensive parsing principles to maintain zero-downtime operations.
+[![Clinical AI Pipeline CI](https://github.com/dammyoguntuyi-ui/Clinical-AI-Triage-Pipeline/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dammyoguntuyi-ui/Clinical-AI-Triage-Pipeline/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python: 3.11](https://img.shields.io/badge/Python-3.11-brightgreen.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg)](https://fastapi.tiangolo.com/)
+[![HL7 FHIR](https://img.shields.io/badge/HL7%20FHIR-R4%20Compliant-firebrick.svg)](https://hl7.org/fhir/)
 
-## 🎥 Live System Demo
+A containerized, resilient, and highly available clinical data ingestion pipeline designed to simulate a real-time hospital environment. The architecture mirrors modern healthtech infrastructure, leveraging an asynchronous streaming microservice feeding a unified frontend dashboard, pre-inference DICOM QA gating, dead-letter quarantine routing, and downstream HL7 FHIR R4 report generation.
 
-[▶️ Click here to watch the 2-minute Live System Demo on Loom](https://www.loom.com/share/531a29bfa65c4d6aa4623eb7eb0c6750)
+🎥 **Live System Demo**
+
+🔗 [Click here to watch the 2-minute Live System Demo on Loom](https://www.loom.com/share/531a29bfa65c4d6aa4623eb7eb0c6750)
 
 > 💡 **Watch the 2-minute overview** showing in-memory DICOM payload generation, real-time asynchronous streaming, and automated clinical AI triage in action.
 
@@ -13,28 +18,16 @@ A containerized, resilient, and highly available clinical data ingestion pipelin
 
 ## 🧬 Tech Stack & Healthcare Standards
 
-* **Language**: Python 3.x
-* **Backend & API Layer**: FastAPI (RESTful FHIR R4 ingestion, Pydantic data validation, `/health` & `/metrics` telemetry endpoints)
-* **Frontend Framework**: Streamlit (Utilizing advanced state handling and `@st.fragment` scheduling)
-* **Data Layout Standards**: HL7/FHIR v4.0.1 compliance representations (Observation & Bundle schemas)
-* **Imaging Formats & Engineering**: In-memory binary `pydicom` object generation, serialization, and metadata attribute extraction (XR, CT, MR, US modalities)
-* **Data Engineering**: Pandas & SQLite (In-memory structural ledger manipulation and chronological vector tracking)
+* **Language:** Python 3.11
+* **Backend & API Layer:** FastAPI (RESTful FHIR R4 ingestion, Pydantic data validation, `/health` & `/metrics` telemetry endpoints)
+* **Frontend & Clinical Console:** Streamlit (Utilizing advanced state handling, `@st.fragment` scheduling, and real-time governance queues)
+* **Healthcare Interoperability:** HL7/FHIR v4.0.1 compliance representations (`DiagnosticReport`, `Observation`, and `Bundle` schemas)
+* **Imaging Formats & Engineering:** `pydicom` object generation, serialization, and metadata attribute extraction (XR, CT, MR, US, CR, MG, and DICOM SEG modalities)
+* **Quality Assurance & Safety Calibration:** Signal-to-Noise Ratio (SNR dB), Contrast-to-Noise Ratio (CNR), out-of-distribution artifact checks, and asymmetric clinical loss ($F_2\text{-Score}$, $\beta=2.0$) auditing
 
 ---
 
-## 🚀 Architectural Topology: Live In-Memory Ingestion & Triage Layer
-
-The pipeline operates via a dual-stream data integration framework to process multi-modality patient bundles asynchronously without disk bottlenecks:
-
-* **In-Memory DICOM Generation (`pydicom`)**: The mock streaming microservice dynamically compiles standard-compliant binary medical imaging datasets (spanning CT, MR, XR, and Ultrasound profiles) entirely in-memory using `io.BytesIO`, avoiding performance lags from heavy disk I/O.
-* **Base64 Payload Streaming**: Binary datasets are serialized into safe, network-transportable UTF-8 Base64 strings and packaged inside an enterprise JSON telemetry frame alongside active FHIR-aligned vital signs.
-* **Automated Extraction & AI Classification**: The Streamlit dashboard intercepts the incoming data stream, decodes the binary metadata arrays on the fly to extract matrix resolutions, and pipes the reconstructed pydicom dataset directly into the local `ai_triage` evaluation engine for immediate emergency classification.
-
----
-
-## 🏗️ System Architecture
-
-The following diagram illustrates how the components interact across the isolated virtual bridge network, highlighting the native socket-based health telemetry monitoring:
+## 🏛️ System Architecture
 
 ```mermaid
 flowchart TD
@@ -46,67 +39,47 @@ flowchart TD
     subgraph Network["Isolated Docker Bridge Network (clinical_triage_net)"]
         Streamer["📡 Asynchronous Telemetry Streamer<br/><code>clinical_mock_streamer</code>"]
         APIService["⚡ FastAPI FHIR Microservice<br/><code>clinical_api_service</code>"]
-        Parser["⚙️ Parser & Ingestion Engine<br/><code>pydicom</code> | <code>hl7</code>"]
-        Engine["🧠 Clinical AI Triage Engine<br/><code>ai_triage.py</code>"]
+        QAGate["🛡️ Pre-Inference DICOM QA Gate<br/><code>qa_evaluator.py</code>"]
+        Quarantine["⚠️ Dead-Letter PACS Quarantine<br/><code>ERR_DICOM_QA_VIOLATION</code>"]
+        Engine["⚙️ Enterprise Hospital Engine<br/><code>enterprise_engine.py</code>"]
         Dashboard["📊 Streamlit Frontend Dashboard<br/><code>clinical_triage_dashboard</code>"]
-
-        Streamer -->|"FHIR Bundles & HL7/DICOM Payloads"| Parser
-        Parser -->|"Structured Clinical Features"| Engine
-        Engine -->|"Prioritized Risk Scores & Emergency Flags"| Dashboard
-        Dashboard -.->|"Python Socket Ping (:5000 Health Check)"| Streamer
     end
 
-    BrowserUI <==>|"Port Mapping (:8501)"| Dashboard
-    APIClient <==>|"Port Mapping (:8000)"| APIService
+    Streamer -->|"Vitals Stream (SpO2 / BPM)"| Dashboard
+    Streamer -->|"FHIR Bundles & DICOM Payloads"| APIService
+    APIService --> QAGate
+    Dashboard --> QAGate
+    
+    QAGate -->|"❌ QA Violation / Low SNR / Missing Tags"| Quarantine
+    QAGate -->|"✅ Valid Acquisition"| Engine
+    
+    Engine -->|"FHIR R4 DiagnosticReport"| Dashboard
+    Engine -->|"Asymmetric Loss Auditing (β=2)"| Dashboard
+
+    BrowserUI <-->|"Port Mapping (:8501)"| Dashboard
+    APIClient <-->|"Port Mapping (:8000)"| APIService
 
     classDef client fill:#3b82f6,stroke:#1d4ed8,stroke-width:2px,color:#fff;
     classDef streamer fill:#10b981,stroke:#047857,stroke-width:2px,color:#fff;
     classDef engine fill:#f59e0b,stroke:#b45309,stroke-width:2px,color:#fff;
     classDef dash fill:#6366f1,stroke:#4338ca,stroke-width:2px,color:#fff;
-    classDef parser fill:#475569,stroke:#334155,stroke-width:2px,color:#fff;
+    classDef qa fill:#ef4444,stroke:#b91c1c,stroke-width:2px,color:#fff;
 
-    class Browser client;
+    class BrowserUI,APIClient client;
     class Streamer streamer;
-    class Parser parser;
-    class Engine engine;
-    class Dashboard dash;
+    class APIService,Engine dash;
+    class QAGate,Quarantine qa;
+    class Dashboard engine;
 ```
 ---
 
-## 🚀 Production Microservices & Endpoints
+## 🛡️ Enterprise Capabilities & Clinical Governance
 
-The pipeline runs a containerized, multi-service architecture orchestrated via Docker Compose:
-
-| Service | Port | Protocol | Description |
-| :--- | :--- | :--- | :--- |
-| **FastAPI Ingestion Engine** | `:8000` | HTTP / REST | Ingests FHIR R4 Bundles, executes defensive DICOM parsing, and reports telemetry. |
-| **Streamlit Clinical UI** | `:8501` | HTTP / WebSocket | Real-time multi-modality clinical ledger and live triage monitoring. |
-| **Telemetry Streamer** | Internal | Python Socket / IPC | Simulates asynchronous DICOM binary headers and physiological bedside telemetry. |
-
-### API Route Specifications (FastAPI)
-* `POST /api/v1/fhir/Bundle` — Ingests multimodal FHIR bundles with automated triage scoring and base64 DICOM decoding.
-* `GET /health` — Automated container uptime and SQLite database reachability checks.
-* `GET /metrics` — Live telemetry metrics reporting ingested case distribution and triage counts.
-* `GET /docs` — Interactive OpenAPI / Swagger UI documentation and testing interface.
-
-### Automated Testing & CI/CD
-* Comprehensive unit and integration test suite (`pytest`, `TestClient`) covering:
-  * DICOM byte parsing and defensive header fallbacks.
-  * Physiological triage threshold scoring logic.
-  * REST API routing, payload validation, and telemetry endpoints.
-* Automated CI workflow on push via **GitHub Actions**.
-
----
-
-## 🛠️ Core Features & Engineering Highlights
-
-* **Asynchronous Clinical Simulation:** Streamer generates comprehensive pseudo-random patient bundles integrating both telemetry data (SpO2 vitals tracking) and optional multi-modality diagnostic imaging strings (CT, MR, XR findings).
-
-* **Native Infrastructure Health Checks:** Built without heavy Linux package dependencies using a native Python socket implementation inside docker-compose.yml to verify pipeline connectivity.
-
-* **Graceful Degradation & Self-Healing:** The dashboard dynamically traps KeyError exceptions and connectivity failures to display specialized clinical fallback UI views rather than triggering unhandled tracebacks.
-
-* **Automated Integration Testing Suite:** Comprehensive automated verification using pytest to guarantee system stability against missing fields, data schema drifts, and polymorphic DICOM header shifts.
+* **Pre-Inference DICOM QA Gate (qa_evaluator.py):** Enforces mandatory clinical tags (SliceThickness, SamplesPerPixel, PhotometricInterpretation, TransferSyntaxUID) and computes image SNR / CNR thresholds across CT, MR, CR, DX, MG, US, and SEG studies prior to model inference.
+* **Dead-Letter PACS Quarantine:** Non-compliant, truncated, or low-contrast acquisitions are automatically isolated into an audit queue flagged with ERR_DICOM_QA_VIOLATION, preventing downstream pipeline crashes.
+* **Multimodal Context Synthesis (enterprise_engine.py):** Fuses bedside vitals telemetry ($SpO_2$, heart rate) with incoming imaging geometry to calculate clinical urgency tiers (Emergency, Urgent, Routine).
+* **HL7 FHIR R4 Dispatcher:** Automatically generates structured, compliant FHIR R4 DiagnosticReport JSON bundles containing clinical findings and metadata extensions.
+* **Clinical Loss Calibration ($\beta=2.0$):** Measures triage safety via asymmetric $F_2\text{-Score}$ to penalize false negatives heavily while continuously monitoring false-positive alarm fatigue.
 
 ## 🧪 Simulation Profile Mappings
 
@@ -120,6 +93,23 @@ The pipeline generates realistic medical scenarios to test AI routing precision 
 | **MR** | Spine | Acute Spinal Cord Compression | Immediate Orthopedic/Neuro Traumatic Lock |
 | **US** | Abdomen | Abdominal Aortic Aneurysm (AAA) Rupture | Vascular Theatre Priority Override |
 
+## 🎛️ Production Microservices & Endpoints
+
+| Service | Port | Protocol | Description |
+| :--- | :--- | :--- | :--- |
+| **FastAPI Ingestion Engine** | `:8000` | HTTP / REST | Ingests FHIR R4 Bundles, executes defensive DICOM parsing, and reports telemetry. |
+| **Streamlit Clinical UI** | `:8501` | HTTP / WebSocket | Real-time multi-modality clinical ledger and live triage monitoring. |
+| **Telemetry Streamer** | Internal | Python Socket / IPC | Simulates asynchronous DICOM binary headers and physiological bedside telemetry. |
+
+### API Route Specifications (FastAPI)
+* `GET /` – Gateway service health and version verification.
+* `POST /triage/study` – Ingests multi-modality study payloads with automated QA auditing and FHIR triage synthesis.
+* `GET /health` – Automated container uptime and database reachability checks.
+* `GET /metrics` – Live telemetry metrics reporting ingested case distribution and triage counts.
+* `GET /docs` – Interactive OpenAPI / Swagger UI documentation and testing interface.
+
+---
+
 ## 🚀 Quick Start Installation
 
 ### 1. Clone the Workspace Repository
@@ -129,20 +119,31 @@ git clone https://github.com/dammyoguntuyi-ui/Clinical-AI-Triage-Pipeline.git
 cd Clinical-AI-Triage-Pipeline
 ```
 
-### 2. Set Up a Python Virtual Environment (Recommended for local running)
-
-```Bash
-python -m venv .venv
-# On Windows PowerShell:
-.\venv\Scripts\Activate.ps1
-```
-
-### 3. Containerized Deployment (Docker Compose)
+### 2. Containerized Deployment (Docker Compose)
 
 To spin up the isolated, fully decoupled microservice architecture:
 
 ```Bash
-docker-compose up --build
+docker compose up --build -d
+```
+
+Once the container layers initialize, open your browser to access the exposed services:
+
+* **Streamlit Clinical Dashboard:** http://localhost:8501
+* **FastAPI Swagger / OpenAPI Interface:** http://localhost:8000/docs
+
+To stop the containers and release network bridges:
+
+```Bash
+docker compose down
+```
+
+### 3. Executing the Automated Test Suite
+
+To verify core data validation logic, multi-modality QA rules, and FHIR dispatch integration across 18 test cases:
+
+```Bash
+docker compose exec api pytest -v
 ```
 Once the container layers initialize, open your browser to access the exposed services:
 
@@ -155,18 +156,13 @@ To cleanly stop the containers and release the isolated virtual network bridges,
 docker-compose down
 ```
 
-### 4. Executing the Automated Test Suite
-
-To verify the core data validation logic, schema fallback routing, and polymorphic DICOM header validation:
-
-```Bash
-python -m pytest test_pipeline.py -v
-```
-
 ---
 
-## 👥 Author & Developer
+## 👤 Author & Developer
 
-* **Adedamola Oguntuyi** * [LinkedIn Profile](https://www.linkedin.com/in/adedamola-oguntuyi-80347a332/)
-  * [GitHub Portfolio](https://github.com/dammyoguntuyi-ui)
-  * *Clinical Radiographer specializing in Medical Data Science & Healthcare AI Ingestion Pipelines.*
+* **Adedamola Oguntuyi** — [LinkedIn Profile](https://www.linkedin.com/in/adedamola-oguntuyi-eng/) | [GitHub Portfolio](https://github.com/dammyoguntuyi-ui)
+* *Clinical Radiographer specializing in Medical Data Science & Healthcare AI Ingestion Pipelines.*
+
+## 📄 License
+
+This project is licensed under the MIT License — see the LICENSE file for details.
