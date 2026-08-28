@@ -31,45 +31,48 @@ A containerized, resilient, and highly available clinical data ingestion pipelin
 
 ```mermaid
 flowchart TD
-    subgraph Client["Host & Client Access"]
-        BrowserUI["🖥️ Clinical Dashboard UI<br/><code>http://localhost:8501</code>"]
-        APIClient["⚡ FHIR REST Client / Swagger Docs<br/><code>http://localhost:8000/docs</code>"]
+    subgraph ClientLayer["🖥️ Host & External Client Layer"]
+        BrowserUI["Clinical Dashboard UI<br/><code>http://localhost:8501</code>"]
+        APIClient["FHIR REST Client / Swagger<br/><code>http://localhost:8000/docs</code>"]
     end
 
-    subgraph Network["Isolated Docker Bridge Network (clinical_triage_net)"]
-        Streamer["📡 Asynchronous Telemetry Streamer<br/><code>clinical_mock_streamer</code>"]
-        APIService["⚡ FastAPI FHIR Microservice<br/><code>clinical_api_service</code>"]
-        QAGate["🛡️ Pre-Inference DICOM QA Gate<br/><code>qa_evaluator.py</code>"]
+    subgraph IngestionLayer["📡 Ingestion & Telemetry Network (clinical_triage_net)"]
+        Streamer["Asynchronous Telemetry Streamer<br/><code>clinical_mock_streamer</code>"]
+        APIService["FastAPI FHIR Microservice<br/><code>clinical_api_service (:8000)</code>"]
+        Dashboard["Streamlit Clinical Frontend<br/><code>clinical_triage_dashboard (:8501)</code>"]
+    end
+
+    subgraph GovernanceLayer["🛡️ Pre-Inference QA & Hospital Governance Engine"]
+        QAGate{"Pre-Inference DICOM QA Gate<br/><code>qa_evaluator.py</code>"}
         Quarantine["⚠️ Dead-Letter PACS Quarantine<br/><code>ERR_DICOM_QA_VIOLATION</code>"]
         Engine["⚙️ Enterprise Hospital Engine<br/><code>enterprise_engine.py</code>"]
-        Dashboard["📊 Streamlit Frontend Dashboard<br/><code>clinical_triage_dashboard</code>"]
     end
 
-    Streamer -->|"Vitals Stream (SpO2 / BPM)"| Dashboard
-    Streamer -->|"FHIR Bundles & DICOM Payloads"| APIService
-    APIService --> QAGate
-    Dashboard --> QAGate
-    
-    QAGate -->|"❌ QA Violation / Low SNR / Missing Tags"| Quarantine
-    QAGate -->|"✅ Valid Acquisition"| Engine
-    
-    Engine -->|"FHIR R4 DiagnosticReport"| Dashboard
-    Engine -->|"Asymmetric Loss Auditing (β=2)"| Dashboard
+    BrowserUI <==>|"Port :8501"| Dashboard
+    APIClient <==>|"Port :8000"| APIService
 
-    BrowserUI <-->|"Port Mapping (:8501)"| Dashboard
-    APIClient <-->|"Port Mapping (:8000)"| APIService
+    Streamer -->|"Bedside Telemetry (SpO2 / BPM)"| Dashboard
+    Streamer -->|"In-Memory DICOM Payloads"| APIService
+    
+    APIService -->|"Route Study"| QAGate
+    Dashboard -->|"Manual Ingestion Audit"| QAGate
 
-    classDef client fill:#3b82f6,stroke:#1d4ed8,stroke-width:2px,color:#fff;
-    classDef streamer fill:#10b981,stroke:#047857,stroke-width:2px,color:#fff;
-    classDef engine fill:#f59e0b,stroke:#b45309,stroke-width:2px,color:#fff;
-    classDef dash fill:#6366f1,stroke:#4338ca,stroke-width:2px,color:#fff;
-    classDef qa fill:#ef4444,stroke:#b91c1c,stroke-width:2px,color:#fff;
+    QAGate -->|"❌ Gating Violation (Low SNR / Bad Tags)"| Quarantine
+    QAGate -->|"✅ Valid Study Passed"| Engine
+
+    Engine -->|"HL7 FHIR R4 DiagnosticReport"| Dashboard
+    Engine -->|"Clinical Safety Loss (β=2.0)"| Dashboard
+
+    classDef client fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
+    classDef network fill:#0f172a,stroke:#10b981,stroke-width:2px,color:#f8fafc;
+    classDef governance fill:#1e1e38,stroke:#8b5cf6,stroke-width:2px,color:#f8fafc;
+    classDef danger fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fee2e2;
+    classDef success fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#d1fae5;
 
     class BrowserUI,APIClient client;
-    class Streamer streamer;
-    class APIService,Engine dash;
-    class QAGate,Quarantine qa;
-    class Dashboard engine;
+    class Streamer,APIService,Dashboard network;
+    class Engine,QAGate governance;
+    class Quarantine danger;
 ```
 ---
 
