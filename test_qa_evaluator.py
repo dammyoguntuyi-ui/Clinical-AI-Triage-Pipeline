@@ -244,3 +244,45 @@ def test_modality_routing_ultrasound_allows_color_doppler(evaluator):
     assert result.is_valid is True
     assert result.modality == "US"
     assert result.photometric_interpretation == "RGB"
+
+
+def test_modality_routing_ultrasound_allows_jpeg2000_ybr_ict(evaluator):
+    """JPEG 2000 color Doppler US files using YBR_ICT must pass validation."""
+    img = np.random.randint(20, 200, size=(100, 100, 3), dtype=np.uint8)
+
+    file_meta = FileMetaDataset()
+    file_meta.MediaStorageSOPClassUID = SecondaryCaptureImageStorage
+    file_meta.MediaStorageSOPInstanceUID = "1.2.826.0.1.3680043.8.498.3"
+    file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
+
+    ds = Dataset()
+    ds.file_meta = file_meta
+    ds.is_little_endian = True
+    ds.is_implicit_VR = False
+    ds.Modality = "US"
+    ds.PhotometricInterpretation = "YBR_ICT"
+    ds.Rows, ds.Columns = 100, 100
+    ds.BitsAllocated = 8
+    ds.BitsStored = 8
+    ds.HighBit = 7
+    ds.PixelRepresentation = 0
+    ds.SamplesPerPixel = 3
+    ds.PlanarConfiguration = 0
+    ds.PixelData = img.tobytes()
+
+    result = evaluator.evaluate_dicom(ds)
+    assert result.is_valid is True
+    assert result.modality == "US"
+    assert result.photometric_interpretation == "YBR_ICT"
+
+
+def test_modality_routing_segmentation_bypasses_noise_audit(evaluator):
+    """DICOM Segmentation (SEG) binary masks should pass without requiring continuous tissue SNR."""
+    mask = np.zeros((100, 100), dtype=np.uint16)
+    mask[40:60, 40:60] = 1
+    dcm = create_synthetic_dicom(mask, modality="SEG", photometric="MONOCHROME2", slice_thickness=None)
+
+    result = evaluator.evaluate_dicom(dcm)
+    assert result.is_valid is True
+    assert result.modality == "SEG"
+    assert result.ood_detected is False

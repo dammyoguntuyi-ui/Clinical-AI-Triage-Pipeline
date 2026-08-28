@@ -1,6 +1,6 @@
 """
 qa_evaluator.py - Modality-Aware Quality Assurance, Anomaly Gating & Clinical Metric Layer
-Supports dynamic evaluation rules tailored for CT, MR, DX/CR, and US.
+Supports dynamic evaluation rules tailored for CT, MR, DX/CR, US, and SEG (Segmentation Objects).
 """
 
 from typing import Dict, List, Optional, Tuple, Any
@@ -50,6 +50,7 @@ class ImageQualityEvaluator:
             "allowed_photometrics": ["MONOCHROME1", "MONOCHROME2"],
             "requires_slice_thickness": True,
             "apply_rescale": True,
+            "is_derived_mask": False,
         },
         "MR": {
             "min_snr_db": 8.0,
@@ -58,30 +59,50 @@ class ImageQualityEvaluator:
             "allowed_photometrics": ["MONOCHROME1", "MONOCHROME2"],
             "requires_slice_thickness": True,
             "apply_rescale": False,
+            "is_derived_mask": False,
         },
-        "DX": {  # Digital Radiography / XR / CR
+        "DX": {  # Digital Radiography / XR
             "min_snr_db": 12.0,
             "min_slice_thickness": None,
             "max_slice_thickness": None,
             "allowed_photometrics": ["MONOCHROME1", "MONOCHROME2"],
             "requires_slice_thickness": False,
             "apply_rescale": False,
+            "is_derived_mask": False,
         },
-        "CR": {
+        "CR": {  # Computed Radiography
             "min_snr_db": 12.0,
             "min_slice_thickness": None,
             "max_slice_thickness": None,
             "allowed_photometrics": ["MONOCHROME1", "MONOCHROME2"],
             "requires_slice_thickness": False,
             "apply_rescale": False,
+            "is_derived_mask": False,
         },
-        "US": {  # Ultrasound (supports Doppler color spaces)
+        "US": {  # Ultrasound (supports Doppler & JPEG2000 color transforms)
             "min_snr_db": 6.0,
             "min_slice_thickness": None,
             "max_slice_thickness": None,
-            "allowed_photometrics": ["MONOCHROME2", "RGB", "YBR_FULL", "YBR_FULL_422"],
+            "allowed_photometrics": [
+                "MONOCHROME2",
+                "RGB",
+                "YBR_FULL",
+                "YBR_FULL_422",
+                "YBR_ICT",
+                "YBR_RCT",
+            ],
             "requires_slice_thickness": False,
             "apply_rescale": False,
+            "is_derived_mask": False,
+        },
+        "SEG": {  # Segmentation / Binary ROI Mask Objects
+            "min_snr_db": None,
+            "min_slice_thickness": None,
+            "max_slice_thickness": None,
+            "allowed_photometrics": ["MONOCHROME2", "BINARY"],
+            "requires_slice_thickness": False,
+            "apply_rescale": False,
+            "is_derived_mask": True,
         },
     }
 
@@ -95,7 +116,7 @@ class ImageQualityEvaluator:
             intercept = float(dcm.RescaleIntercept)
             pixels = (pixels * slope) + intercept
 
-        # Convert multi-channel (e.g. RGB Ultrasound) to luminance for SNR/CNR analysis
+        # Convert multi-channel (e.g. RGB/YBR Ultrasound) to luminance for SNR/CNR analysis
         if pixels.ndim == 3 and pixels.shape[-1] in (3, 4):
             pixels = 0.2989 * pixels[:, :, 0] + 0.5870 * pixels[:, :, 1] + 0.1140 * pixels[:, :, 2]
 
@@ -118,7 +139,7 @@ class ImageQualityEvaluator:
         return round(float(snr_db), 2), round(float(cnr), 2)
 
     def detect_out_of_distribution(self, pixel_array: np.ndarray) -> Tuple[bool, List[str]]:
-        """Flags degenerate scans, saturated sensors, and extreme clipping."""
+        """Flags degenerate acquisitions, saturated sensors, and extreme clipping."""
         ood_flags = []
         if np.std(pixel_array) < 1e-3:
             ood_flags.append("Degenerate acquisition: Zero pixel variance detected.")
@@ -136,15 +157,18 @@ class ImageQualityEvaluator:
         """Dynamically routes validation logic based on DICOM Modality tag."""
         rejection_reasons = []
         modality = getattr(dcm, "Modality", "UNKNOWN").upper()
-        
-        # Route modality rule set, fallback to default profile if unknown
-        rules = self.MODALITY_RULES.get(modality, {
-            "min_snr_db": 8.0,
-            "min_slice_thickness": None,
-            "max_slice_thickness": None,
-            "allowed_photometrics": ["MONOCHROME1", "MONOCHROME2", "RGB"],
-            "requires_slice_thickness": False,
-        })
+
+        rules = self.MODALITY_RULES.get(
+            modality,
+            {
+                "min_snr_db": 8.0,
+                "min_slice_thickness": None,
+                "max_slice_thickness": None,
+                "allowed_photometrics": ["MONOCHROME1", "MONOCHROME2", "RGB", "YBR_FULL", "YBR_ICT"],
+                "requires_slice_thickness": False,
+                "is_derived_mask": False,
+            },
+        )
 
         # 1. Photometric Validation
         photo_interp = getattr(dcm, "PhotometricInterpretation", "UNKNOWN")
@@ -166,14 +190,29 @@ class ImageQualityEvaluator:
                         f"Slice thickness {slice_thickness}mm out of range ({min_th}-{max_th}mm) for {modality}."
                     )
 
-        # 3. Pixel Calibration & Analysis
+        # 3. Derived Masks / SEG Objects Bypass Acoustic Noise & HU Audits
+        if rules.get("is_derived_mask", False):
+            return QAEvaluationResult(
+                modality=modality,
+                is_valid=len(rejection_reasons) == 0,
+                rejection_reasons=rejection_reasons,
+                snr_db=0.0,
+                cnr=0.0,
+                slice_thickness_mm=float(slice_thickness) if slice_thickness else None,
+                photometric_interpretation=photo_interp,
+                ood_detected=False,
+            )
+
+        # 4. Pixel Calibration & Acoustic/Signal Analysis
         try:
             pixel_array = self._normalize_pixel_data(dcm, modality)
             snr_db, cnr = self.compute_snr_and_cnr(pixel_array)
             ood_detected, ood_reasons = self.detect_out_of_distribution(pixel_array)
 
-            if snr_db < rules["min_snr_db"]:
-                rejection_reasons.append(f"Low SNR ({snr_db} dB < {rules['min_snr_db']} dB threshold for {modality}).")
+            if rules["min_snr_db"] is not None and snr_db < rules["min_snr_db"]:
+                rejection_reasons.append(
+                    f"Low SNR ({snr_db} dB < {rules['min_snr_db']} dB threshold for {modality})."
+                )
 
             rejection_reasons.extend(ood_reasons)
 
