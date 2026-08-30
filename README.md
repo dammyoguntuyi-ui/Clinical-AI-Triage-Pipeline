@@ -6,7 +6,9 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg)](https://fastapi.tiangolo.com/)
 [![HL7 FHIR](https://img.shields.io/badge/HL7%20FHIR-R4%20Compliant-firebrick.svg)](https://hl7.org/fhir/)
 
-A containerized, resilient, and highly available clinical data ingestion pipeline designed to simulate a real-time hospital environment. The architecture mirrors modern healthtech infrastructure, leveraging an asynchronous streaming microservice feeding a unified frontend dashboard, pre-inference DICOM QA gating, dead-letter quarantine routing, and downstream HL7 FHIR R4 report generation.
+A containerized, resilient, and highly available clinical data ingestion pipeline designed to simulate a real-time hospital environment. The architecture mirrors modern healthtech infrastructure, leveraging an asynchronous streaming microservice feeding a unified frontend dashboard, pre-inference DICOM QA gating, dynamic multi-tier urgency filtering, persistent clinical action state management, dead-letter quarantine routing, and downstream HL7 FHIR R4 report generation.
+
+---
 
 🎥 **Live System Demo**
 
@@ -16,11 +18,11 @@ A containerized, resilient, and highly available clinical data ingestion pipelin
 
 ---
 
-## 🧬 Tech Stack & Healthcare Standards
+## 🛠 Tech Stack & Healthcare Standards
 
 * **Language:** Python 3.11
 * **Backend & API Layer:** FastAPI (RESTful FHIR R4 ingestion, Pydantic data validation, `/health` & `/metrics` telemetry endpoints)
-* **Frontend & Clinical Console:** Streamlit (Utilizing advanced state handling, `@st.fragment` scheduling, and real-time governance queues)
+* **Frontend & Clinical Console:** Streamlit (Utilizing advanced state handling, `@st.fragment` background scheduling, and real-time governance queues)
 * **Healthcare Interoperability:** HL7/FHIR v4.0.1 compliance representations (`DiagnosticReport`, `Observation`, and `Bundle` schemas)
 * **Imaging Formats & Engineering:** `pydicom` object generation, serialization, and metadata attribute extraction (XR, CT, MR, US, CR, MG, and DICOM SEG modalities)
 * **Quality Assurance & Safety Calibration:** Signal-to-Noise Ratio (SNR dB), Contrast-to-Noise Ratio (CNR), out-of-distribution artifact checks, and asymmetric clinical loss ($F_2\text{-Score}$, $\beta=2.0$) auditing
@@ -36,24 +38,24 @@ flowchart TD
         APIClient["FHIR REST Client / Swagger<br/><code>http://localhost:8000/docs</code>"]
     end
 
-    subgraph IngestionLayer["📡 Ingestion & Telemetry Network (clinical_triage_net)"]
+    subgraph IngestionLayer["🔀 Ingestion & Telemetry Network (clinical_triage_net)"]
         Streamer["Asynchronous Telemetry Streamer<br/><code>clinical_mock_streamer</code>"]
         APIService["FastAPI FHIR Microservice<br/><code>clinical_api_service (:8000)</code>"]
         Dashboard["Streamlit Clinical Frontend<br/><code>clinical_triage_dashboard (:8501)</code>"]
     end
 
     subgraph GovernanceLayer["🛡️ Pre-Inference QA & Hospital Governance Engine"]
-        QAGate{"Pre-Inference DICOM QA Gate<br/><code>qa_evaluator.py</code>"}
+        QAGate["Pre-Inference DICOM QA Gate<br/><code>qa_evaluator.py</code>"]
         Quarantine["⚠️ Dead-Letter PACS Quarantine<br/><code>ERR_DICOM_QA_VIOLATION</code>"]
         Engine["⚙️ Enterprise Hospital Engine<br/><code>enterprise_engine.py</code>"]
     end
 
-    BrowserUI <==>|"Port :8501"| Dashboard
-    APIClient <==>|"Port :8000"| APIService
+    BrowserUI <-->|"Port :8501"| Dashboard
+    APIClient <-->|"Port :8000"| APIService
 
     Streamer -->|"Bedside Telemetry (SpO2 / BPM)"| Dashboard
     Streamer -->|"In-Memory DICOM Payloads"| APIService
-    
+
     APIService -->|"Route Study"| QAGate
     Dashboard -->|"Manual Ingestion Audit"| QAGate
 
@@ -63,11 +65,11 @@ flowchart TD
     Engine -->|"HL7 FHIR R4 DiagnosticReport"| Dashboard
     Engine -->|"Clinical Safety Loss (β=2.0)"| Dashboard
 
-    classDef client fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
-    classDef network fill:#0f172a,stroke:#10b981,stroke-width:2px,color:#f8fafc;
-    classDef governance fill:#1e1e38,stroke:#8b5cf6,stroke-width:2px,color:#f8fafc;
-    classDef danger fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fee2e2;
-    classDef success fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#d1fae5;
+    classDef client fill:#01e293b,stroke:#3b82f6,stroke-width:2px,color:#0f0faff;
+    classDef network fill:#00f172a,stroke:#10b981,stroke-width:2px,color:#f8fafc;
+    classDef governance fill:#01e1e38,stroke:#0b5cf6,stroke-width:2px,color:#0f8fafc;
+    classDef danger fill:#07f1d1d,stroke:#ef4444,stroke-width:2px,color:#fee2e2;
+    classDef success fill:#0064e3b,stroke:#10b981,stroke-width:2px,color:#d1fae5;
 
     class BrowserUI,APIClient client;
     class Streamer,APIService,Dashboard network;
@@ -83,6 +85,8 @@ flowchart TD
 * **Multimodal Context Synthesis (enterprise_engine.py):** Fuses bedside vitals telemetry ($SpO_2$, heart rate) with incoming imaging geometry to calculate clinical urgency tiers (Emergency, Urgent, Routine).
 * **HL7 FHIR R4 Dispatcher:** Automatically generates structured, compliant FHIR R4 DiagnosticReport JSON bundles containing clinical findings and metadata extensions.
 * **Clinical Loss Calibration ($\beta=2.0$):** Measures triage safety via asymmetric $F_2\text{-Score}$ to penalize false negatives heavily while continuously monitoring false-positive alarm fatigue.
+* **Master Clinical Ledger & Multi-Tier Filtering:** Real-time synchronized queue with dynamic filtering across urgency tiers (Emergency, Urgent, Routine) and imaging attachment status (Attached Imaging Only, Pending Imaging Only).
+* **Attending MD Review Console & Claim Workflow:** State-locked clinical action panel enabling clinicians to claim and update patient lifecycle states (🔴 Unassigned ➔ 🟡 Under MD Review ➔ 🟢 Triaged & Signed Off) persisted across background stream cycles.
 
 ## 🧪 Simulation Profile Mappings
 
