@@ -10,11 +10,11 @@ A containerized, resilient, and highly available clinical data ingestion pipelin
 
 ---
 
-🎥 **Live System Demo**
+## 📺 Live System Demo
 
-🔗 [Click here to watch the 2-minute Live System Demo on Loom](https://www.loom.com/share/531a29bfa65c4d6aa4623eb7eb0c6750)
+🔗 **[Click here to watch the Live System Demo on Loom](https://www.loom.com/share/14f2402d4df54a60b6efbdde9dfa597e)**
 
-> 💡 **Watch the 2-minute overview** showing in-memory DICOM payload generation, real-time asynchronous streaming, and automated clinical AI triage in action.
+> 💡 **Watch the 3-minute overview** showing in-memory DICOM payload generation, real-time asynchronous streaming, clinical attending claim workflows, and automated clinical AI triage in action.
 
 ---
 
