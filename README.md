@@ -53,9 +53,14 @@ flowchart TD
     end
 
     subgraph Dispatch["📄 Interoperability & Audit Layer"]
-        Engine -->|"HL7 FHIR R4 DiagnosticReport"| UI
-        Engine -->|"Clinical Safety Loss (β=2.0)"| UI
+        FHIRReport["HL7 FHIR R4 DiagnosticReport<br/>(JSON Observation Bundle)"]
+        SafetyLoss["Clinical Safety Loss Gate<br/>(F2-Score β=2.0 Audit)"]
     end
+
+    Engine --> FHIRReport
+    Engine --> SafetyLoss
+    FHIRReport --> UI
+    SafetyLoss --> UI
 
     classDef client fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
     classDef streamer fill:#0f172a,stroke:#10b981,stroke-width:2px,color:#f8fafc;
@@ -67,6 +72,7 @@ flowchart TD
     class Streamer streamer;
     class QAGate,Engine governance;
     class Quarantine danger;
+    class FHIRReport,SafetyLoss dispatch;
 ```
 ---
 
