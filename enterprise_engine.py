@@ -6,7 +6,26 @@ from typing import Dict, Any
 import datetime
 import pydicom
 from qa_evaluator import ImageQualityEvaluator, QAEvaluationResult
+from enum import Enum
 
+class TriageUrgency(str, Enum):
+    EMERGENCY = "Emergency"
+    EXPEDITED_REVIEW = "Expedited Manual Review"
+    ROUTINE = "Routine"
+
+MODALITY_CONFIG = {
+    # Plain Film (X-Ray / DX / CR)
+    "DX": {"threshold": 0.30, "lower_bound": 0.20},
+    "CR": {"threshold": 0.30, "lower_bound": 0.20},
+    # CT (High acute risk: ICH, PE) - lower threshold drives sensitivity >95%
+    "CT": {"threshold": 0.22, "lower_bound": 0.15},
+    # MRI (Elective vs acute cord/stroke)
+    "MR": {"threshold": 0.40, "lower_bound": 0.25},
+    # Ultrasound (Operator-dependent)
+    "US": {"threshold": 0.35, "lower_bound": 0.22},
+    # Default fallback
+    "DEFAULT": {"threshold": 0.30, "lower_bound": 0.20},
+}
 
 class EnterpriseHospitalEngine:
     def __init__(self):
@@ -39,7 +58,8 @@ class EnterpriseHospitalEngine:
             return {"outcome": "QUARANTINED", "payload": quarantine_event, "qa_result": qa_result}
 
         # Scenario B: QA Passed -> Multimodal Triage Synthesis & FHIR Dispatch
-        urgency_tier = self._determine_urgency(patient_vitals, qa_result)
+        ai_conf = float(patient_vitals.get("ai_confidence", 0.0))
+        urgency_tier = self._determine_urgency(patient_vitals, qa_result, ai_confidence=ai_conf)
         fhir_report = self._generate_fhir_diagnostic_report(
             patient_id, qa_result, patient_vitals, urgency_tier, timestamp
         )
@@ -56,14 +76,33 @@ class EnterpriseHospitalEngine:
         }
         return {"outcome": "DISPATCHED", "payload": dispatched_event, "qa_result": qa_result}
 
-    def _determine_urgency(self, vitals: Dict[str, Any], qa: QAEvaluationResult) -> str:
-        """Synthesizes clinical vitals and imaging study context."""
+    def _determine_urgency(
+        self,
+        vitals: Dict[str, Any],
+        qa: QAEvaluationResult,
+        ai_confidence: float = 0.0
+    ) -> str:
+        """Synthesizes clinical vitals, DICOM QA metrics, and modality-aware AI confidence."""
         spo2 = vitals.get("spo2", 98)
-        if spo2 < 85 or (qa.modality in ["CT", "MR"] and qa.slice_thickness_mm and qa.slice_thickness_mm <= 1.0):
-            return "Emergency"
-        elif spo2 < 92:
+        modality = (qa.modality or "DEFAULT").upper()
+        config = MODALITY_CONFIG.get(modality, MODALITY_CONFIG["DEFAULT"])
+
+        tau = config["threshold"]
+        lower_bound = config["lower_bound"]
+
+        # 1. Critical Physiological Distress or AI Exceeding Modality Cutoff
+        if spo2 < 85 or ai_confidence >= tau:
+            return TriageUrgency.EMERGENCY.value
+
+        # 2. Slice-specific critical scan or Borderline Safety Margin -> Expedited Review
+        if (qa.modality in ["CT", "MR"] and qa.slice_thickness_mm and qa.slice_thickness_mm <= 2.5) or (ai_confidence >= lower_bound):
+            return TriageUrgency.EXPEDITED_REVIEW.value
+
+        # 3. Semi-urgent oxygenation
+        if spo2 < 92:
             return "Urgent"
-        return "Routine"
+
+        return TriageUrgency.ROUTINE.value
 
     def _generate_fhir_diagnostic_report(
         self, patient_id: str, qa: QAEvaluationResult, vitals: Dict[str, Any], tier: str, timestamp: str

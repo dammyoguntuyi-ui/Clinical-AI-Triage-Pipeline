@@ -83,3 +83,46 @@ def test_enterprise_engine_quarantine_routing():
     assert result["outcome"] == "QUARANTINED"
     assert result["payload"]["status"] == "QUARANTINED"
     assert result["payload"]["hl7_error_code"] == "ERR_DICOM_QA_VIOLATION"
+
+def test_modality_specific_triage_thresholds():
+    """Verifies modality-aware operating points and indeterminate safety band routing."""
+    engine = EnterpriseHospitalEngine()
+
+    # 1. CT Acute Threshold test: 0.23 exceeds CT cutoff (0.22) -> Emergency
+    ct_dcm = create_synthetic_dicom_dataset(modality="CT", slice_thickness=5.0)
+    res_ct = engine.process_clinical_study(ct_dcm, {"ai_confidence": 0.23, "spo2": 98})
+    assert res_ct["outcome"] == "DISPATCHED"
+    assert res_ct["payload"]["urgency_tier"] == "Emergency"
+
+    # 2. X-Ray (DX) Safety Margin test: 0.25 is in [0.20 - 0.30] -> Expedited Manual Review
+    dx_dcm = create_synthetic_dicom_dataset(modality="DX")
+    res_dx = engine.process_clinical_study(dx_dcm, {"ai_confidence": 0.25, "spo2": 98})
+    assert res_dx["outcome"] == "DISPATCHED"
+    assert res_dx["payload"]["urgency_tier"] == "Expedited Manual Review"
+
+    # 3. Routine Low-Risk test: 0.10 is below lower bound (0.20) -> Routine
+    res_dx_low = engine.process_clinical_study(dx_dcm, {"ai_confidence": 0.10, "spo2": 98})
+    assert res_dx_low["outcome"] == "DISPATCHED"
+    assert res_dx_low["payload"]["urgency_tier"] == "Routine"
+
+    # 4. Ultrasound (US) Safety Margin test: 0.28 is in [0.22 - 0.35] -> Expedited Manual Review
+    us_dcm = create_synthetic_dicom_dataset(modality="US")
+    res_us_band = engine.process_clinical_study(us_dcm, {"ai_confidence": 0.28, "spo2": 98})
+    assert res_us_band["outcome"] == "DISPATCHED"
+    assert res_us_band["payload"]["urgency_tier"] == "Expedited Manual Review"
+
+    # 5. Ultrasound (US) Acute Trigger: 0.38 exceeds cutoff (0.35) -> Emergency
+    res_us_acute = engine.process_clinical_study(us_dcm, {"ai_confidence": 0.38, "spo2": 98})
+    assert res_us_acute["outcome"] == "DISPATCHED"
+    assert res_us_acute["payload"]["urgency_tier"] == "Emergency"
+
+    # 6. MRI (MR) Elective / Routine test: 0.18 is below lower bound (0.25) -> Routine
+    mr_dcm = create_synthetic_dicom_dataset(modality="MR", slice_thickness=5.0)
+    res_mr_low = engine.process_clinical_study(mr_dcm, {"ai_confidence": 0.18, "spo2": 98})
+    assert res_mr_low["outcome"] == "DISPATCHED"
+    assert res_mr_low["payload"]["urgency_tier"] == "Routine"
+
+    # 7. MRI (MR) Acute Threshold test: 0.42 exceeds cutoff (0.40) -> Emergency
+    res_mr_acute = engine.process_clinical_study(mr_dcm, {"ai_confidence": 0.42, "spo2": 98})
+    assert res_mr_acute["outcome"] == "DISPATCHED"
+    assert res_mr_acute["payload"]["urgency_tier"] == "Emergency"
