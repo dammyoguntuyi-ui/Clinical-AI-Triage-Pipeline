@@ -23,8 +23,8 @@ A containerized, resilient clinical data ingestion and triage pipeline designed 
 * **Language:** Python 3.11
 * **Backend & API Layer:** FastAPI (RESTful FHIR R4 ingestion, Pydantic data validation, `/health` & `/metrics` telemetry endpoints)
 * **Frontend & Clinical Console:** Streamlit (Utilizing advanced state handling, `@st.fragment` background scheduling, and real-time governance queues)
-* **Healthcare Interoperability:** HL7/FHIR v4.0.1 compliance representations (`DiagnosticReport`, `Observation`, and `Bundle` schemas)
-* **Imaging Formats & Engineering:** `pydicom` object generation, serialization, and metadata attribute extraction (CT, DX, MR, US, CR, MG, and DICOM SEG modalities)
+* **Healthcare Interoperability:** HL7/FHIR v4.0.1 compliance representations (`DiagnosticReport`, `Observation`, and `Bundle` schemas) & DICOM SR TID 1500 (Comprehensive 3D SR & Linear Measurement Logging)
+* **Imaging Formats & Engineering:** `pydicom` object generation, serialization, metadata attribute extraction (CT, DX, MR, US, CR, MG, and DICOM SEG modalities), and secondary capture/structured report linking
 * **Quality Assurance & Safety Calibration:** Signal-to-Noise Ratio (SNR dB), Contrast-to-Noise Ratio (CNR), out-of-distribution artifact checks, and asymmetric clinical loss ($F_2\text{-Score}$, $\beta=2.0$) auditing
 
 ---
@@ -77,12 +77,15 @@ flowchart TD
 
     subgraph Dispatch["📄 Interoperability & Audit Layer"]
         FHIRReport["HL7 FHIR R4 DiagnosticReport<br/>(JSON Observation Bundle)"]
+        DICOMSR["DICOM SR TID 1500 Report<br/>(pydicom Serializer)"]
         SafetyLoss["Clinical Safety Loss Gate<br/>(F2-Score β=2.0 Audit)"]
     end
 
     Engine --> FHIRReport
+    Engine --> DICOMSR
     Engine --> SafetyLoss
     FHIRReport --> UI
+    DICOMSR --> UI
     SafetyLoss --> UI
 
     classDef client fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
@@ -109,6 +112,7 @@ flowchart TD
 * **HL7 FHIR R4 Dispatcher:** Automatically generates structured, compliant FHIR R4 DiagnosticReport JSON bundles containing clinical findings and metadata extensions.
 * **Clinical Loss Calibration ($\beta=2.0$):** Measures triage safety via asymmetric $F_2\text{-Score}$ to penalize false negatives heavily while continuously monitoring false-positive alarm fatigue.
 * **Interactive Gold-Standard Benchmark:** One-click automated sensitivity and specificity evaluation within the clinical dashboard UI, auditing cohort classifications and streaming ledger exports.
+* **Automated DICOM Structured Reporting (TID 1500):** Post-inference engine serializes persistent, standards-compliant DICOM SR measurement documents linking quantitative findings (`Maximum Long-Axis Lesion Diameter` in mm) directly to source study SOP UIDs, complete with in-console file telemetry inspection and artifact downloads.
 * **Attending MD Review Console & Claim Workflow:** State-locked clinical action panel enabling clinicians to claim and update patient lifecycle states (🔴 Unassigned ➔ 🟡 Under MD Review ➔ 🟢 Triaged & Signed Off) persisted across background stream cycles.
 
 ## 🧪 Simulation Profile Mappings
