@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 streaming_intake/
 .DS_Store
+# Processed DICOM & Clinical Artifacts
+processed/*.dcm
+processed/*
+!processed/.gitkeep
