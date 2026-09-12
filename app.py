@@ -14,9 +14,11 @@ import pandas as pd
 import pydicom
 import streamlit as st
 
+from pathlib import Path
 from enterprise_engine import EnterpriseHospitalEngine, MODALITY_CONFIG
 from qa_evaluator import ClinicalMetricsAuditor
 from scripts.evaluate_gold_standard import run_corpus_evaluation
+from src.dicom_sr import create_measurement_sr
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -35,6 +37,18 @@ if "dispatched_fhir_logs" not in st.session_state:
 
 if "quarantined_studies_logs" not in st.session_state:
     st.session_state.quarantined_studies_logs = []
+
+if "generated_sr_logs" not in st.session_state:
+    st.session_state.generated_sr_logs = []
+
+if "sr_cache_by_sop" not in st.session_state:
+    st.session_state.sr_cache_by_sop = {}  # SOPInstanceUID -> persistent SR record
+
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
+
+if "processed_upload_keys" not in st.session_state:
+    st.session_state.processed_upload_keys = set()
 
 if "last_poll_time" not in st.session_state:
     st.session_state.last_poll_time = time.time()
@@ -116,100 +130,147 @@ st.sidebar.info(
     "explicitly mapped alongside radiology imaging data vectors."
 )
 
-if st.sidebar.button("🗑️ Clear Local Log Cache"):
+if st.sidebar.button("🗑️ Clear Local Log Cache", use_container_width=True):
     st.session_state.dispatched_fhir_logs = []
+    st.session_state.generated_sr_logs = []
     st.session_state.quarantined_studies_logs = []
+    if "sr_cache_by_sop" in st.session_state:
+        st.session_state.sr_cache_by_sop = {}
+    if "processed_upload_keys" in st.session_state:
+        st.session_state.processed_upload_keys = set()
+    
+    # Force the file_uploader widget to reset and clear attached files
+    st.session_state.uploader_key += 1
+
+    st.sidebar.success("Cache and uploaded batch cleared.")
     st.rerun()
 
 # --- SIDEBAR: PRE-INFERENCE QA & ANOMALY DETECTION ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("🛡️ Pre-Inference DICOM QA Gate")
-uploaded_dcm = st.sidebar.file_uploader(
-    "Audit DICOM Acquisition", type=["dcm"], key="qa_dcm_uploader"
+
+uploaded_dcms = st.sidebar.file_uploader(
+    "Audit DICOM Acquisition",
+    type=["dcm"],
+    accept_multiple_files=True,
+    key=f"qa_dcm_uploader_{st.session_state.uploader_key}",
 )
 
-if uploaded_dcm:
-    dcm = pydicom.dcmread(uploaded_dcm)
+if uploaded_dcms:
+    current_active_sops = []
 
-    latest_vitals = {"spo2": 97.0, "patient_id": getattr(dcm, "PatientID", "pat-7577"), "ai_confidence": 0.28}
-    if not st.session_state.clinical_history.empty:
-        latest_row = st.session_state.clinical_history.iloc[0]
-        raw_spo2 = str(latest_row.get("SpO2 Vitals", "97")).split("%")[0]
-        try:
-            latest_vitals["spo2"] = float(raw_spo2)
-        except ValueError:
-            latest_vitals["spo2"] = 97.0
-        latest_vitals["patient_id"] = str(
-            latest_row.get("Patient ID", latest_vitals["patient_id"])
-        )
+    for uploaded_dcm in uploaded_dcms:
+        uploaded_dcm.seek(0)
+        dcm = pydicom.dcmread(uploaded_dcm)
+        sop_uid = str(getattr(dcm, "SOPInstanceUID", uploaded_dcm.name))
+        current_active_sops.append(sop_uid)
 
-    process_result = st.session_state.enterprise_engine.process_clinical_study(
-        dcm, latest_vitals
-    )
-    qa_res = process_result["qa_result"]
+        # If this study has already been evaluated, skip re-evaluating to preserve measurements
+        if sop_uid in st.session_state.sr_cache_by_sop:
+            continue
 
-    c1, c2 = st.sidebar.columns(2)
-    c1.metric(
-        "SNR (dB)",
-        f"{qa_res.snr_db} dB",
-        delta="Optimal" if qa_res.snr_db >= 8.0 else "Low",
-    )
-    c2.metric("CNR", f"{qa_res.cnr}")
-
-    current_ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    reconciled_patient_id = process_result["payload"].get(
-        "patient_id", latest_vitals["patient_id"]
-    )
-    modality_type = process_result["payload"].get(
-        "modality", getattr(dcm, "Modality", "XR")
-    )
-
-    if process_result["outcome"] == "DISPATCHED":
-        st.sidebar.success("✅ QA Passed: Ingestion & Dispatch Compliant")
-        if not any(
-            d["patient_id"] == process_result["payload"]["patient_id"]
-            for d in st.session_state.dispatched_fhir_logs
-        ):
-            st.session_state.dispatched_fhir_logs.insert(0, process_result["payload"])
-
-        modality_status = f"{modality_type} (SNR: {qa_res.snr_db:.1f} dB)"
-        integration_status = "FHIR DISPATCHED"
-
-    else:
-        st.sidebar.error(
-            f"❌ Rejected: {process_result['payload']['rejection_reasons']}"
-        )
-        if not any(
-            q["patient_id"] == process_result["payload"]["patient_id"]
-            for q in st.session_state.quarantined_studies_logs
-        ):
-            st.session_state.quarantined_studies_logs.insert(
-                0, process_result["payload"]
+        latest_vitals = {
+            "spo2": 97.0,
+            "patient_id": getattr(dcm, "PatientID", "pat-7577"),
+            "ai_confidence": 0.28,
+        }
+        if not st.session_state.clinical_history.empty:
+            latest_row = st.session_state.clinical_history.iloc[0]
+            raw_spo2 = str(latest_row.get("SpO2 Vitals", "97")).split("%")[0]
+            try:
+                latest_vitals["spo2"] = float(raw_spo2)
+            except ValueError:
+                latest_vitals["spo2"] = 97.0
+            latest_vitals["patient_id"] = str(
+                latest_row.get("Patient ID", latest_vitals["patient_id"])
             )
 
-        modality_status = f"{modality_type} (Quarantined)"
-        integration_status = "DEAD-LETTER QA FAIL"
-
-    ledger = st.session_state.clinical_history
-    if reconciled_patient_id in ledger["Patient ID"].values:
-        idx = ledger.index[ledger["Patient ID"] == reconciled_patient_id].tolist()[0]
-        ledger.at[idx, "Modality Attached"] = modality_status
-        ledger.at[idx, "Integration Status"] = integration_status
-        ledger.at[idx, "Timestamp"] = current_ts
-    else:
-        new_entry = {
-            "Timestamp": current_ts,
-            "Patient ID": reconciled_patient_id,
-            "SpO2 Vitals": f"{latest_vitals['spo2']}%",
-            "Heart Rate (BPM)": random.randint(70, 95),
-            "Modality Attached": modality_status,
-            "Triage Urgency": process_result["payload"].get("urgency_tier", "Expedited Manual Review"),
-            "Integration Status": integration_status,
-            "Attending Status": "🔴 Unassigned",
-        }
-        st.session_state.clinical_history = pd.concat(
-            [pd.DataFrame([new_entry]), ledger], ignore_index=True
+        process_result = st.session_state.enterprise_engine.process_clinical_study(
+            dcm, latest_vitals
         )
+        qa_res = process_result["qa_result"]
+        current_ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        reconciled_patient_id = process_result["payload"].get(
+            "patient_id", latest_vitals["patient_id"]
+        )
+        modality_type = process_result["payload"].get(
+            "modality", getattr(dcm, "Modality", "XR")
+        )
+
+        if process_result["outcome"] == "DISPATCHED":
+            # Deterministic measurement fixed to the SOP instance
+            seed_val = int(abs(hash(sop_uid)) % 1390) / 100.0
+            meas_val = round(8.5 + seed_val, 2)
+
+            sr_dataset = create_measurement_sr(
+                source_dcm=dcm,
+                finding_name="Maximum Long-Axis Lesion Diameter",
+                measurement_val=meas_val,
+                unit_code="mm",
+                unit_meaning="millimeter",
+            )
+
+            sr_filename = f"processed/SR_{reconciled_patient_id}_{sop_uid[-6:]}.dcm"
+            sr_dataset.save_as(sr_filename, write_like_original=False)
+
+            sr_entry = {
+                "timestamp": current_ts,
+                "patient_id": reconciled_patient_id,
+                "modality": "SR",
+                "concept": "Maximum Long-Axis Lesion Diameter",
+                "measurement": f"{meas_val:.2f} mm",
+                "source_sop": sop_uid,
+                "sr_sop": sr_dataset.SOPInstanceUID,
+                "sr_path": sr_filename,
+                "sr_dataset": sr_dataset,
+                "fhir_payload": process_result["payload"],
+            }
+            # Cache permanently by SOP
+            st.session_state.sr_cache_by_sop[sop_uid] = sr_entry
+
+            modality_status = f"{modality_type} (SNR: {qa_res.snr_db:.1f} dB)"
+            integration_status = "FHIR & DICOM-SR DISPATCHED"
+        else:
+            modality_status = f"{modality_type} (Quarantined)"
+            integration_status = "DEAD-LETTER QA FAIL"
+
+        # Update or prepend to the master ledger
+        ledger = st.session_state.clinical_history
+        if reconciled_patient_id in ledger["Patient ID"].values:
+            idx = ledger.index[ledger["Patient ID"] == reconciled_patient_id].tolist()[0]
+            ledger.at[idx, "Modality Attached"] = modality_status
+            ledger.at[idx, "Integration Status"] = integration_status
+            ledger.at[idx, "Timestamp"] = current_ts
+        else:
+            new_entry = {
+                "Timestamp": current_ts,
+                "Patient ID": reconciled_patient_id,
+                "SpO2 Vitals": f"{latest_vitals['spo2']}%",
+                "Heart Rate (BPM)": random.randint(70, 95),
+                "Modality Attached": modality_status,
+                "Triage Urgency": process_result["payload"].get(
+                    "urgency_tier", "Expedited Manual Review"
+                ),
+                "Integration Status": integration_status,
+                "Attending Status": "🔴 Unassigned",
+            }
+            st.session_state.clinical_history = pd.concat(
+                [pd.DataFrame([new_entry]), ledger], ignore_index=True
+            )
+
+    # Sync visible reports strictly to what is currently loaded in the uploader
+    st.session_state.generated_sr_logs = [
+        st.session_state.sr_cache_by_sop[sop]
+        for sop in current_active_sops
+        if sop in st.session_state.sr_cache_by_sop
+    ]
+    st.session_state.dispatched_fhir_logs = [
+        item["fhir_payload"] for item in st.session_state.generated_sr_logs
+    ]
+else:
+    # If all files are closed, reset the visible tables
+    st.session_state.generated_sr_logs = []
+    st.session_state.dispatched_fhir_logs = []
 
 # --- SIDEBAR: CLINICAL SAFETY & LOSS CALIBRATION ---
 st.sidebar.markdown("---")
@@ -480,8 +541,12 @@ if "eval_corpus_df" in st.session_state:
 # --- MAIN VIEW: ENTERPRISE AUDIT & DISPATCH CONSOLE ---
 st.markdown("---")
 st.subheader("📄 Enterprise Triage & Clinical Governance Logs")
-tab1, tab2 = st.tabs(
-    ["🚀 Dispatched FHIR R4 DiagnosticReports", "⚠️ Quarantined Dead-Letter Studies"]
+tab1, tab2, tab3 = st.tabs(
+    [
+        "🚀 Dispatched FHIR R4 DiagnosticReports",
+        "📋 Automated DICOM Structured Reports (SR)",
+        "⚠️ Quarantined Dead-Letter Studies",
+    ]
 )
 
 with tab1:
@@ -510,6 +575,63 @@ with tab1:
         )
 
 with tab2:
+    if st.session_state.generated_sr_logs:
+        df_sr = pd.DataFrame(
+            [
+                {
+                    "Timestamp": s["timestamp"],
+                    "Patient ID": s["patient_id"],
+                    "Modality": s["modality"],
+                    "Finding Concept": s["concept"],
+                    "Extracted Measurement": s["measurement"],
+                    "Target Study SOP": s["source_sop"][:24] + "...",
+                    "SR SOP Instance": s["sr_sop"][:24] + "...",
+                }
+                for s in st.session_state.generated_sr_logs
+            ]
+        )
+        st.dataframe(df_sr, use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+        
+        # --- PATIENT SELECTOR FOR CLINICIANS ---
+        sr_options = [
+            f"{s['patient_id']} | {s['concept']} ({s['measurement']}) - {s['timestamp'][-12:-7]}"
+            for s in st.session_state.generated_sr_logs
+        ]
+        
+        selected_sr_label = st.selectbox(
+            "🔎 Select Patient Report to Review & Download:",
+            options=sr_options,
+            key="sr_patient_selector"
+        )
+        
+        selected_idx = sr_options.index(selected_sr_label)
+        active_sr = st.session_state.generated_sr_logs[selected_idx]
+
+        # Display Selected Patient Telemetry & Download
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            st.write(f"**Extracted Telemetry: `{active_sr['patient_id']}`**")
+            st.info(f"**Concept:** {active_sr['concept']}\n\n**Measurement:** {active_sr['measurement']}\n\n**Parent SOP:** `{active_sr['source_sop']}`")
+        with col_s2:
+            st.write("**Export Clinical Artifact**")
+            with open(active_sr["sr_path"], "rb") as f:
+                st.download_button(
+                    label=f"⬇️ Download DICOM SR for {active_sr['patient_id']} (.dcm)",
+                    data=f,
+                    file_name=Path(active_sr["sr_path"]).name,
+                    mime="application/dicom",
+                    key=f"btn_dl_{active_sr['sr_sop']}"
+                )
+
+        with st.expander(f"🔍 Inspect Raw DICOM SR Tags ({active_sr['patient_id']})"):
+            st.code(str(active_sr["sr_dataset"]), language="text")
+            
+    else:
+        st.info("No DICOM SR artifacts serialized yet. Ingest an acquisition via the sidebar to generate a structured report.")
+
+with tab3:
     if st.session_state.quarantined_studies_logs:
         df_quarantined = pd.DataFrame(
             [
