@@ -324,13 +324,13 @@ st.title("🫁 Enterprise Clinical AI Triage Dashboard")
 st.markdown("#### Aggregated Data Streams & Multimodal Governance Engine")
 
 # --- LIVE TELEMETRY AUTO-POLL & WORKFLOW FRAGMENT ---
-@st.fragment(run_every=10)
+@st.fragment(run_every=2)
 def render_live_clinical_console():
     """Polls incoming telemetry smoothly and maintains persistent UI selection state."""
     current_time = time.time()
     elapsed = current_time - st.session_state.last_poll_time
 
-    if elapsed >= 10.0:
+    if elapsed >= 2.0:
         new_packet = get_next_stream_packet()
         new_row = pd.DataFrame([new_packet])
         st.session_state.clinical_history = pd.concat(
@@ -339,6 +339,32 @@ def render_live_clinical_console():
         st.session_state.last_poll_time = current_time
 
     latest = st.session_state.clinical_history.iloc[0]
+
+    # --- Live HL7 / MLLP Ingestion Feed ---
+    triage_file = Path("/app/latest_triage.json") if Path("/app").exists() else Path("latest_triage.json")
+    
+    if triage_file.exists():
+        try:
+            with open(triage_file, "r") as f:
+                triage_data = json.load(f)
+            
+            payload = triage_data.get("payload", {})
+
+            st.markdown("### Live Ingestion Feed (MLLP Gateway)")
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Patient ID", payload.get("patient_id", "N/A"))
+            m2.metric("Pipeline Status", payload.get("status", triage_data.get("outcome", "DISPATCHED")))
+            m3.metric("Urgency Tier", payload.get("urgency_tier", "Routine"))
+
+            with st.expander("Interoperability Payload (FHIR R4 Ingress)"):
+                st.json(payload.get("fhir_payload", {}))
+
+            with st.expander("Modality QA & Pixel Telemetry"):
+                st.write(payload.get("qa_result", {}))
+        except Exception as err:
+            st.error(f"Read Error on latest_triage.json: {err}")
+    else:
+        st.caption(f"Awaiting MLLP Feed (File not found at: {triage_file.resolve()})")
 
     col_t1, col_t2, col_t3 = st.columns(3)
     col_t1.metric("Active Target Patient ID", str(latest["Patient ID"]))
@@ -568,7 +594,7 @@ with tab1:
         )
         st.dataframe(df_dispatched, use_container_width=True, hide_index=True)
 
-        with st.expander("🔍 Inspect Latest Dispatched FHIR R4 JSON Bundle"):
+        with st.expander("🔍 Canonical Triage Document (EHR / PACS Egress)"):
             st.json(st.session_state.dispatched_fhir_logs[0]["fhir_payload"])
     else:
         st.info(
@@ -653,33 +679,3 @@ with tab3:
             "Dead-letter Queue clear: No non-compliant or corrupted acquisitions detected."
         )
 
-st.divider()
-st.subheader("Live Clinical HL7 / MLLP Ingestion Feed")
-
-state_file = Path(__file__).parent / "latest_triage.json"
-
-if state_file.exists():
-    try:
-        with open(state_file, "r") as f:
-            live_data = json.load(f)
-
-        outcome = live_data.get("outcome", "UNKNOWN")
-        payload_info = live_data.get("payload", {})
-        patient_id = payload_info.get("patient_id", "N/A")
-        tier = payload_info.get("urgency_tier", "Standard")
-
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Patient ID", patient_id)
-        col2.metric("Pipeline Status", outcome)
-        col3.metric("Urgency Tier", tier)
-
-        with st.expander("Outbound FHIR DiagnosticReport"):
-            st.json(payload_info.get("fhir_payload", {}))
-
-        with st.expander("QA & Pixel Metrics"):
-            st.json(live_data.get("qa_result", {}))
-
-    except Exception as e:
-        st.warning(f"Error loading stream state: {e}")
-else:
-    st.info("No incoming MLLP messages detected yet. Awaiting HL7 feed on port 6661.")
