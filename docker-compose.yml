@@ -55,7 +55,25 @@ services:
       api:
         condition: service_started
     restart: always
-
+# -------------------------------------------------------------
+  # NextGen Mirth Connect HL7 / MLLP Integration Engine
+  # -------------------------------------------------------------
+  mirth_connect:
+    image: nextgenhealthcare/connect:latest
+    container_name: clinical_mirth_connect
+    ports:
+      - "8443:8443"  # Mirth Web Administrator
+      - "6661:6661"  # MLLP Ingestion Port
+    volumes:
+      - mirth_appdata:/opt/connect/appdata
+    networks:
+      - clinical_triage_net
+    restart: always
 networks:
   clinical_triage_net:
     driver: bridge
+
+volumes:
+  mirth_appdata:
+    external: true
+    name: mirth-integration_mirth_appdata

@@ -9,6 +9,8 @@ import pydicom
 from pydicom.dataset import Dataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, SecondaryCaptureImageStorage
 import numpy as np
+import json
+from pathlib import Path
 
 from enterprise_engine import EnterpriseHospitalEngine
 from qa_evaluator import ImageQualityEvaluator
@@ -55,6 +57,7 @@ def triage_study(payload: StudyPayload):
         ds.is_implicit_VR = False
         ds.Modality = payload.modality
         ds.PhotometricInterpretation = "MONOCHROME2"
+        ds.SamplesPerPixel = 1
         ds.PatientID = payload.patient_id
         ds.Rows, ds.Columns = 64, 64
         ds.BitsAllocated = 16
@@ -67,6 +70,16 @@ def triage_study(payload: StudyPayload):
 
         vitals = {"spo2": payload.spo2, "patient_id": payload.patient_id}
         result = engine.process_clinical_study(ds, vitals)
+
+        # Write latest triage dispatch for Streamlit consumption
+        try:
+            state_file = Path(__file__).parent / "latest_triage.json"
+            with open(state_file, "w") as f:
+                json.dump(result, f, indent=2, default=str)
+            print(f"[STATE] Successfully saved triage to {state_file}")
+        except Exception as err:
+            print(f"[STATE ERROR] {err}")
+
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

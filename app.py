@@ -13,6 +13,7 @@ from typing import Dict, Any, List
 import pandas as pd
 import pydicom
 import streamlit as st
+import json
 
 from pathlib import Path
 from enterprise_engine import EnterpriseHospitalEngine, MODALITY_CONFIG
@@ -651,3 +652,34 @@ with tab3:
         st.success(
             "Dead-letter Queue clear: No non-compliant or corrupted acquisitions detected."
         )
+
+st.divider()
+st.subheader("Live Clinical HL7 / MLLP Ingestion Feed")
+
+state_file = Path(__file__).parent / "latest_triage.json"
+
+if state_file.exists():
+    try:
+        with open(state_file, "r") as f:
+            live_data = json.load(f)
+
+        outcome = live_data.get("outcome", "UNKNOWN")
+        payload_info = live_data.get("payload", {})
+        patient_id = payload_info.get("patient_id", "N/A")
+        tier = payload_info.get("urgency_tier", "Standard")
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Patient ID", patient_id)
+        col2.metric("Pipeline Status", outcome)
+        col3.metric("Urgency Tier", tier)
+
+        with st.expander("Outbound FHIR DiagnosticReport"):
+            st.json(payload_info.get("fhir_payload", {}))
+
+        with st.expander("QA & Pixel Metrics"):
+            st.json(live_data.get("qa_result", {}))
+
+    except Exception as e:
+        st.warning(f"Error loading stream state: {e}")
+else:
+    st.info("No incoming MLLP messages detected yet. Awaiting HL7 feed on port 6661.")
