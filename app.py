@@ -19,6 +19,11 @@ from pathlib import Path
 from enterprise_engine import EnterpriseHospitalEngine, MODALITY_CONFIG
 from qa_evaluator import ClinicalMetricsAuditor
 from scripts.evaluate_gold_standard import run_corpus_evaluation
+from database import (
+    init_db, log_packet, update_or_insert_ledger_record, update_attending_status, 
+    fetch_ledger_records, get_all_patient_ids, log_quarantine_event, fetch_dlq_records,
+    execute_raw_sql_query, archive_and_tier_historical_data
+)
 from src.dicom_sr import create_measurement_sr
 
 # --- PAGE CONFIGURATION ---
@@ -29,7 +34,10 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# --- SESSION STATE INITIALIZATION ---
+# --- DATABASE INITIALIZATION ---
+init_db()
+
+# --- SESSION STATE & DATABASE SEEDING ---
 if "enterprise_engine" not in st.session_state:
     st.session_state.enterprise_engine = EnterpriseHospitalEngine()
 
@@ -57,23 +65,21 @@ if "last_poll_time" not in st.session_state:
 if "selected_action_patient" not in st.session_state:
     st.session_state.selected_action_patient = None
 
-if "clinical_history" not in st.session_state:
+# Seed initial records into SQLite if the database table is empty
+if len(get_all_patient_ids()) == 0:
     now = datetime.datetime.now(datetime.timezone.utc)
-    st.session_state.clinical_history = pd.DataFrame(
-        [
-            {
-                "Timestamp": (now - datetime.timedelta(seconds=i * 20)).isoformat(),
-                "Patient ID": f"pat-{random.randint(1000, 9999)}",
-                "SpO2 Vitals": f"{random.randint(88, 99)}% (Normal)" if i % 2 == 0 else f"{random.randint(78, 86)}% (Low)",
-                "Heart Rate (BPM)": random.randint(65, 110),
-                "Modality Attached": "None (Pending)",
-                "Triage Urgency": "Emergency" if i % 3 == 0 else ("Expedited Manual Review" if i % 2 == 0 else "Routine"),
-                "Integration Status": "STREAMING VITALS",
-                "Attending Status": "🔴 Unassigned",
-            }
-            for i in range(5)
-        ]
-    )
+    for i in range(5):
+        seed_packet = {
+            "Timestamp": (now - datetime.timedelta(seconds=i * 20)).isoformat(),
+            "Patient ID": f"pat-{random.randint(1000, 9999)}",
+            "SpO2 Vitals": f"{random.randint(88, 99)}% (Normal)" if i % 2 == 0 else f"{random.randint(78, 86)}% (Low)",
+            "Heart Rate (BPM)": random.randint(65, 110),
+            "Modality Attached": "None (Pending)",
+            "Triage Urgency": "Emergency" if i % 3 == 0 else ("Expedited Manual Review" if i % 2 == 0 else "Routine"),
+            "Integration Status": "STREAMING VITALS",
+            "Attending Status": "🔴 Unassigned",
+        }
+        log_packet(seed_packet)
 
 # --- SIMULATION HELPERS ---
 def get_next_stream_packet() -> Dict[str, Any]:
@@ -175,8 +181,11 @@ if uploaded_dcms:
             "patient_id": getattr(dcm, "PatientID", "pat-7577"),
             "ai_confidence": 0.28,
         }
-        if not st.session_state.clinical_history.empty:
-            latest_row = st.session_state.clinical_history.iloc[0]
+        
+        # Get latest baseline SpO2 from SQLite database
+        all_patients = fetch_ledger_records(limit=1)
+        if not all_patients.empty:
+            latest_row = all_patients.iloc[0]
             raw_spo2 = str(latest_row.get("SpO2 Vitals", "97")).split("%")[0]
             try:
                 latest_vitals["spo2"] = float(raw_spo2)
@@ -235,29 +244,25 @@ if uploaded_dcms:
             modality_status = f"{modality_type} (Quarantined)"
             integration_status = "DEAD-LETTER QA FAIL"
 
-        # Update or prepend to the master ledger
-        ledger = st.session_state.clinical_history
-        if reconciled_patient_id in ledger["Patient ID"].values:
-            idx = ledger.index[ledger["Patient ID"] == reconciled_patient_id].tolist()[0]
-            ledger.at[idx, "Modality Attached"] = modality_status
-            ledger.at[idx, "Integration Status"] = integration_status
-            ledger.at[idx, "Timestamp"] = current_ts
-        else:
-            new_entry = {
-                "Timestamp": current_ts,
-                "Patient ID": reconciled_patient_id,
-                "SpO2 Vitals": f"{latest_vitals['spo2']}%",
-                "Heart Rate (BPM)": random.randint(70, 95),
-                "Modality Attached": modality_status,
-                "Triage Urgency": process_result["payload"].get(
-                    "urgency_tier", "Expedited Manual Review"
-                ),
-                "Integration Status": integration_status,
-                "Attending Status": "🔴 Unassigned",
-            }
-            st.session_state.clinical_history = pd.concat(
-                [pd.DataFrame([new_entry]), ledger], ignore_index=True
+            # Log failure into the SQLite Dead-Letter Queue (DLQ)
+            log_quarantine_event(
+                patient_id=reconciled_patient_id,
+                modality=modality_type,
+                error_code="ERR-DICOM-QA-01",
+                reasons=", ".join(qa_res.rejection_reasons),
+                raw_payload=str(dcm[:100]) if hasattr(dcm, '__getitem__') else ""
             )
+
+        # Update or insert into persistent SQLite database ledger
+        update_or_insert_ledger_record(
+            patient_id=reconciled_patient_id,
+            modality_status=modality_status,
+            integration_status=integration_status,
+            current_ts=current_ts,
+            urgency=process_result["payload"].get("urgency_tier", "Expedited Manual Review"),
+            spo2=f"{latest_vitals['spo2']}%",
+            hr=random.randint(70, 95)
+        )
 
     # Sync visible reports strictly to what is currently loaded in the uploader
     st.session_state.generated_sr_logs = [
@@ -324,21 +329,22 @@ st.title("🫁 Enterprise Clinical AI Triage Dashboard")
 st.markdown("#### Aggregated Data Streams & Multimodal Governance Engine")
 
 # --- LIVE TELEMETRY AUTO-POLL & WORKFLOW FRAGMENT ---
-@st.fragment(run_every=2)
+@st.fragment(run_every=10)
 def render_live_clinical_console():
     """Polls incoming telemetry smoothly and maintains persistent UI selection state."""
     current_time = time.time()
     elapsed = current_time - st.session_state.last_poll_time
 
-    if elapsed >= 2.0:
+    if elapsed >= 10.0:
         new_packet = get_next_stream_packet()
-        new_row = pd.DataFrame([new_packet])
-        st.session_state.clinical_history = pd.concat(
-            [new_row, st.session_state.clinical_history], ignore_index=True
-        ).head(30)
+        log_packet(new_packet)  # Logs directly to persistent SQLite database
         st.session_state.last_poll_time = current_time
 
-    latest = st.session_state.clinical_history.iloc[0]
+    # Fetch latest row from SQLite for top metrics display
+    latest_df = fetch_ledger_records(limit=1)
+    latest = latest_df.iloc[0] if not latest_df.empty else {
+        "Patient ID": "N/A", "SpO2 Vitals": "N/A", "Triage Urgency": "Routine"
+    }
 
     # --- Live HL7 / MLLP Ingestion Feed ---
     triage_file = Path("/app/latest_triage.json") if Path("/app").exists() else Path("latest_triage.json")
@@ -390,14 +396,12 @@ def render_live_clinical_console():
             key="ledger_modality_filter_key",
         )
 
-    df_display = st.session_state.clinical_history.copy()
-    if selected_urgency_filter:
-        df_display = df_display[df_display["Triage Urgency"].isin(selected_urgency_filter)]
-
-    if selected_modality_filter == "Attached Imaging Only":
-        df_display = df_display[df_display["Modality Attached"] != "None (Pending)"]
-    elif selected_modality_filter == "Pending Imaging Only":
-        df_display = df_display[df_display["Modality Attached"] == "None (Pending)"]
+    # Fetch filtered data directly via parameterized SQL queries
+    df_display = fetch_ledger_records(
+        urgency_filters=selected_urgency_filter,
+        modality_filter=selected_modality_filter,
+        limit=50
+    )
 
     st.dataframe(df_display, use_container_width=True, hide_index=True)
 
@@ -405,7 +409,7 @@ def render_live_clinical_console():
     with st.expander("🩺 Clinical Action & Attending MD Console", expanded=True):
         act_col1, act_col2, act_col3 = st.columns([2, 2, 1])
 
-        patient_options = st.session_state.clinical_history["Patient ID"].tolist()
+        patient_options = get_all_patient_ids()
 
         if st.session_state.selected_action_patient not in patient_options:
             st.session_state.selected_action_patient = (
@@ -440,14 +444,10 @@ def render_live_clinical_console():
             st.write("")
             st.write("")
             if st.button("Apply Status", key="btn_apply_clinical_status"):
-                if chosen_patient in st.session_state.clinical_history["Patient ID"].values:
-                    p_idx = st.session_state.clinical_history.index[
-                        st.session_state.clinical_history["Patient ID"] == chosen_patient
-                    ].tolist()[0]
-                    st.session_state.clinical_history.at[
-                        p_idx, "Attending Status"
-                    ] = target_status
+                if chosen_patient:
+                    update_attending_status(chosen_patient, target_status)
                     st.success(f"Updated {chosen_patient} ➔ {target_status}")
+                    st.rerun()
 
 render_live_clinical_console()
 
@@ -659,23 +659,43 @@ with tab2:
         st.info("No DICOM SR artifacts serialized yet. Ingest an acquisition via the sidebar to generate a structured report.")
 
 with tab3:
-    if st.session_state.quarantined_studies_logs:
-        df_quarantined = pd.DataFrame(
-            [
-                {
-                    "Timestamp": q["timestamp"],
-                    "Patient ID": q["patient_id"],
-                    "Modality": q["modality"],
-                    "Rejection Reasons": q["rejection_reasons"],
-                    "Error Code": q["hl7_error_code"],
-                    "Status": q["status"],
-                }
-                for q in st.session_state.quarantined_studies_logs
-            ]
-        )
-        st.dataframe(df_quarantined, use_container_width=True, hide_index=True)
+    df_quarantined_sql = fetch_dlq_records()
+    if not df_quarantined_sql.empty:
+        st.dataframe(df_quarantined_sql, use_container_width=True, hide_index=True)
     else:
         st.success(
-            "Dead-letter Queue clear: No non-compliant or corrupted acquisitions detected."
+            "Dead-letter Queue clear: No non-compliant or corrupted acquisitions detected in SQLite DLQ."
         )
 
+# --- PACS ADMIN & VNA DATA MANAGEMENT CONSOLE ---
+st.markdown("---")
+st.subheader("🗄️ PACS Database Admin & VNA Lifecycle Console")
+
+admin_tab1, admin_tab2 = st.tabs([
+    "🔍 Diagnostic SQL Inspector", 
+    "📦 VNA Warm/Cold Storage Migration"
+])
+
+with admin_tab1:
+    st.caption("Run read-only parameterized diagnostic SQL queries directly against `clinical_audit.db`.")
+    default_sql = "SELECT patient_id, triage_urgency, modality_attached, integration_status FROM clinical_ledger WHERE triage_urgency = 'Emergency' ORDER BY timestamp DESC"
+    user_query = st.text_area("SQL Query Input:", value=default_sql, height=100)
+    
+    if st.button("⚡ Execute Diagnostic Query", key="btn_exec_sql"):
+        try:
+            query_res = execute_raw_sql_query(user_query)
+            st.success(f"Query returned {len(query_res)} rows.")
+            st.dataframe(query_res, use_container_width=True)
+        except Exception as e:
+            st.error(f"SQL Execution Error: {e}")
+
+with admin_tab2:
+    st.caption("Simulate automated VNA lifecycle tiering: Move older audit records from warm SQL storage to cold archive files.")
+    retention_target = st.number_input("Warm Storage Retention Limit (Records):", min_value=5, max_value=500, value=30)
+    
+    if st.button("📦 Execute VNA Storage Tiering", key="btn_vna_tiering"):
+        res = archive_and_tier_historical_data(retention_count=retention_target)
+        if res["status"] == "SUCCESS":
+            st.success(res["message"])
+        else:
+            st.info(res["message"])

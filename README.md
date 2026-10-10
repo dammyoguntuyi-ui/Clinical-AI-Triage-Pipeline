@@ -4,10 +4,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python: 3.11](https://img.shields.io/badge/Python-3.11-brightgreen.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg)](https://fastapi.tiangolo.com/)
+[![SQLite](https://img.shields.io/badge/SQLite-3-blue.svg)](https://www.sqlite.org/)
 [![HL7 FHIR](https://img.shields.io/badge/HL7%20FHIR-R4%20Compliant-firebrick.svg)](https://hl7.org/fhir/)
 [![HL7 v2 MLLP](https://img.shields.io/badge/HL7%20v2.3-MLLP%20Ingress-blueviolet.svg)](https://www.hl7.org/)
 
-A containerized, resilient clinical data integration and triage pipeline designed to bridge legacy hospital networking (HL7 v2 over MLLP) with modern cloud-native healthcare standards (FHIR R4). The architecture mirrors production healthtech systems, featuring an interface engine gateway (Mirth Connect), automated pre-inference DICOM QA gating, dynamic multimodal urgency classification, persistent clinical action state management, dead-letter quarantine routing, and dual-layer ingress/egress telemetry.
+A containerized, resilient clinical data integration and triage pipeline designed to bridge legacy hospital networking (HL7 v2 over MLLP) with modern cloud-native healthcare standards (FHIR R4) and enterprise VNA/PACS data governance practices. The architecture mirrors production healthtech systems, featuring an interface engine gateway (Mirth Connect), automated pre-inference DICOM QA gating, persistent SQLite ledger indexing, read-only diagnostic SQL support tools, dynamic multimodal urgency classification, persistent clinical action state management, dead-letter quarantine routing, and automated VNA storage tiering.
 
 ---
 
@@ -15,19 +16,20 @@ A containerized, resilient clinical data integration and triage pipeline designe
 
 🔗 **[Click here to watch the Live System Demo on Loom](https://www.loom.com/share/14f2402d4df54a60b6efbdde9dfa597e)**
 
-> 💡 **Watch the overview** showing in-memory DICOM payload generation, real-time asynchronous streaming, clinical attending claim workflows, and automated clinical AI triage in action.
+> 💡 **Watch the overview** showing DICOM payload generation, real-time asynchronous streaming, clinical attending claim workflows, persistent database logging, and automated clinical AI triage in action.
 
 ---
 
 ## 🛠 Tech Stack & Healthcare Standards
 
-* **Language & Runtime:** Python 3.11
-* **Integration Gateway & Interface Engine:** Mirth Connect / NextGen Connect (HL7 v2.3 ADT/ORU over TCP/MLLP parsing, XML/JSON transformation, HTTP dispatch)
-* **Backend & API Layer:** FastAPI (RESTful FHIR R4 ingestion, Pydantic data validation, `/health` & `/metrics` telemetry endpoints)
-* **Frontend & Clinical Console:** Streamlit (Scoped `@st.fragment` state updates, dual ingress/egress telemetry cards, real-time governance queues)
-* **Healthcare Interoperability:** HL7 v2.3 MLLP protocol framing, HL7 FHIR v4.0.1 compliance (`DiagnosticReport`, `Observation`, and `Bundle` schemas), and DICOM SR TID 1500 (Comprehensive 3D SR & Linear Measurement Logging)
-* **Imaging Engineering:** `pydicom` object generation, serialization, metadata extraction (CT, DX, MR, US, CR, MG, and DICOM SEG modalities), secondary capture, and structured report linking
-* **Quality Assurance & Safety Calibration:** Signal-to-Noise Ratio (SNR dB), Contrast-to-Noise Ratio (CNR), out-of-distribution artifact checks, and asymmetric clinical loss ($F_2\text{-Score}$, $\beta=2.0$) auditing
+- **Language & Runtime:** Python 3.11
+- **Database & Persistence Layer:** SQLite 3 (`clinical_audit.db`) with transactional integrity, parameterized SQL queries, and database indexes (`idx_patient_id`, `idx_urgency`, `idx_timestamp`, `idx_dlq_status`)
+- **Integration Gateway & Interface Engine:** Mirth Connect / NextGen Connect (HL7 v2.3 ADT/ORU over TCP/MLLP parsing, XML/JSON transformation, HTTP dispatch)
+- **Backend & API Layer:** FastAPI (RESTful FHIR R4 ingestion, Pydantic data validation, `/health` & `/metrics` telemetry endpoints)
+- **Frontend & Clinical Console:** Streamlit (Scoped `@st.fragment` state updates, dual ingress/egress telemetry cards, diagnostic SQL console, and real-time governance queues)
+- **Healthcare Interoperability:** HL7 v2.3 MLLP protocol framing, HL7 FHIR v4.0.1 compliance (`DiagnosticReport`, `Observation`, and `Bundle` schemas), and DICOM SR TID 1500 (Comprehensive 3D SR & Linear Measurement Logging)
+- **Imaging Engineering:** `pydicom` object generation, serialization, metadata extraction (CT, DX, MR, US, CR, MG, and DICOM SEG modalities), secondary capture, and structured report linking
+- **Quality Assurance & Safety Calibration:** Signal-to-Noise Ratio (SNR dB), Contrast-to-Noise Ratio (CNR), out-of-distribution artifact checks, and asymmetric clinical loss ($F_2\text{-Score}$, $\beta=2.0$) auditing
 
 ---
 
@@ -48,7 +50,7 @@ flowchart TD
         FastAPI["FastAPI Ingestion Gateway<br/>(Port :8000 /triage/study)"]
         QAGate["Pre-Inference DICOM QA Gate<br/>(qa_evaluator.py)"]
         TriageEngine["Multimodal Clinical Triage Engine<br/>(enterprise_engine.py)"]
-        Quarantine["⚠️ Dead-Letter PACS Quarantine<br/>(ERR_DICOM_QA_VIOLATION)"]
+        Quarantine["⚠️ SQLite Dead-Letter Queue (DLQ)<br/>(ERR-DICOM-QA-01)"]
         
         Mirth -->|"HTTP REST JSON Payload"| FastAPI
         FastAPI --> QAGate
@@ -56,9 +58,18 @@ flowchart TD
         QAGate -->|"✅ Compliant Acquisition"| TriageEngine
     end
 
-    subgraph State["💾 State Persistence & Bind Mounts"]
-        StateFile[("Shared Docker Volume<br/>latest_triage.json")]
-        TriageEngine -->|"Atomic State Cache"| StateFile
+    subgraph Persistence["💾 Persistent VNA/PACS Audit Layer"]
+        SQLDB[("Persistent SQLite Backend<br/>clinical_audit.db")]
+        TriageEngine -->|"Atomic SQL Commit"| SQLDB
+        Quarantine -->|"Persistent Exception Log"| SQLDB
+    end
+
+    subgraph Governance["🛠️ PACS Admin & VNA Lifecycle Console"]
+        SQLInspector["🔍 Diagnostic SQL Inspector<br/>(Read-Only Parameterized Queries)"]
+        VNAMigration["📦 VNA Storage Tiering<br/>(Warm to Cold JSON Migration)"]
+        
+        SQLDB <--> SQLInspector
+        SQLDB --> VNAMigration
     end
 
     subgraph Egress["🖥️ Clinical Front End & Interoperability"]
@@ -66,7 +77,7 @@ flowchart TD
         FHIRReport["Canonical Triage Document<br/>(FHIR R4 DiagnosticReport Egress)"]
         DICOMSR["DICOM SR TID 1500 Report<br/>(pydicom Serializer)"]
         
-        StateFile -.->|"Scoped Fragment Polling"| UI
+        SQLDB -.->|"Parameterized SQL Queries"| UI
         TriageEngine --> FHIRReport
         TriageEngine --> DICOMSR
         FHIRReport --> UI
@@ -77,24 +88,24 @@ flowchart TD
     classDef orch fill:#1e1e38,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
     classDef danger fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fee2e2;
     classDef state fill:#0f172a,stroke:#10b981,stroke-width:2px,color:#f8fafc;
-    classDef egress fill:#064e3b,stroke:#059669,stroke-width:2px,color:#d1fae5;
+    classDef egress fill:#064e3b,stroke:#059669,stroke-width:2px,color:#f8fafc;
 
     class Scanner,Streamer,Mirth edge;
     class FastAPI,QAGate,TriageEngine orch;
     class Quarantine danger;
-    class StateFile state;
+    class SQLDB,SQLInspector,VNAMigration state;
     class UI,FHIRReport,DICOMSR egress;
 ```
 ---
 
 ## 🛡️ Enterprise Capabilities & Clinical Governance
 
+* **Persistent VNA/PACS Audit Backend (`database.py`):** Replaced volatile temporary state with an ACID-compliant SQLite database (`clinical_audit.db`). Features dedicated indexes (`idx_patient_id`, `idx_urgency`, `idx_timestamp`, `idx_dlq_status`) and parameterized SQL query execution (`fetch_ledger_records()`) to ensure audit immutability and high-performance querying.
+* **Diagnostic SQL Inspector UI:** Integrated a read-only SQL administrative interface in the governance console allowing engineers to execute custom parameterized diagnostic queries directly against the live database for troubleshooting and audit inspection.
+* **VNA Warm/Cold Storage Lifecycle Tiering:** Implements automated storage tiering to archive historical ledger records into structured JSON cold retention files when active warm storage exceeds configured thresholds.
+* **Dead-Letter PACS Quarantine (DLQ):** Non-compliant, truncated, or low-contrast acquisitions are automatically isolated into a persistent SQL-backed Dead-Letter Queue (`quarantine_dlq`) flagged with standardized error codes (e.g., `ERR-DICOM-QA-01`).
 * **Protocol Modernization (MLLP to FHIR R4):** Ingests raw HL7 v2 messages (`ADT^A01`, `ORU^R01`) across TCP port `6661`, translates payloads within Mirth Connect, and maps parameters into standard FHIR R4 `DiagnosticReport` schemas.
-* **Dual Ingress / Egress Telemetry Architecture:**
-  * **Live Ingestion Feed (MLLP Gateway):** Provides biomedical and integration engineers with real-time insight into wire-level socket transit and interim JSON/FHIR translation directly from the edge cache.
-  * **Canonical Triage Document (EHR / PACS Egress):** Manages the immutable, finalized clinical assessment committed to downstream electronic health record ledgers.
 * **Pre-Inference DICOM QA Gate (`qa_evaluator.py`):** Enforces mandatory clinical tags (`SliceThickness`, `SamplesPerPixel`, `PhotometricInterpretation`, `TransferSyntaxUID`) and computes image SNR / CNR thresholds across CT, MR, CR, DX, MG, US, and SEG acquisitions prior to model inference.
-* **Dead-Letter PACS Quarantine:** Non-compliant, truncated, or low-contrast acquisitions are automatically isolated into an audit queue flagged with `ERR_DICOM_QA_VIOLATION`, safeguarding downstream models.
 * **Multimodal Context Synthesis (`enterprise_engine.py`):** Fuses bedside vitals telemetry ($SpO_2$, heart rate) with incoming imaging geometry to calculate clinical urgency tiers (`Emergency`, `Expedited Manual Review`, `Urgent`, `Routine`).
 * **Automated DICOM Structured Reporting (TID 1500):** Post-inference engine serializes persistent, standards-compliant DICOM SR measurement documents linking quantitative findings (`Maximum Long-Axis Lesion Diameter` in mm) directly to source study SOP UIDs, complete with in-console file telemetry inspection and artifact downloads.
 * **Attending MD Review Console & Claim Workflow:** State-locked clinical action panel enabling clinicians to claim and update patient lifecycle states (🔴 Unassigned ➔ 🟡 Under MD Review ➔ 🟢 Triaged & Signed Off) persisted across background stream cycles.
