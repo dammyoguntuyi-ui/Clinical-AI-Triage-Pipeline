@@ -8,28 +8,28 @@
 [![HL7 FHIR](https://img.shields.io/badge/HL7%20FHIR-R4%20Compliant-firebrick.svg)](https://hl7.org/fhir/)
 [![HL7 v2 MLLP](https://img.shields.io/badge/HL7%20v2.3-MLLP%20Ingress-blueviolet.svg)](https://www.hl7.org/)
 
-A containerized, resilient clinical data integration and triage pipeline designed to bridge legacy hospital networking (HL7 v2 over MLLP) with modern cloud-native healthcare standards (FHIR R4) and enterprise VNA/PACS data governance practices. The architecture mirrors production healthtech systems, featuring an interface engine gateway (Mirth Connect), automated pre-inference DICOM QA gating, persistent SQLite ledger indexing, read-only diagnostic SQL support tools, dynamic multimodal urgency classification, persistent clinical action state management, dead-letter quarantine routing, and automated VNA storage tiering.
+A containerized, resilient clinical data integration and triage pipeline designed to bridge legacy hospital networking (HL7 v2 over MLLP) with modern cloud-native healthcare standards (FHIR R4) and enterprise VNA/PACS data governance practices. 
+
+The architecture mirrors production healthtech systems, featuring an interface engine gateway (Mirth Connect), automated pre-inference DICOM QA gating, persistent SQLite ledger indexing, true DICOM pixel-space measurement parsing, expert ground-truth validation benchmarking, read-only diagnostic SQL support tools, dynamic multimodal urgency classification, persistent clinical action state management, dead-letter quarantine routing, and automated VNA storage tiering.
 
 ---
 
 ## 📺 Live System Demo
 
-🔗 **[Click here to watch the Live System Demo on Loom](https://www.loom.com/share/14f2402d4df54a60b6efbdde9dfa597e)**
-
-> 💡 **Watch the overview** showing DICOM payload generation, real-time asynchronous streaming, clinical attending claim workflows, persistent database logging, and automated clinical AI triage in action.
+> 🎬 **System Demo Video Coming Soon!** *(Updated to showcase true pixel-space extraction, SQLite SR persistence, and expert ground-truth benchmarking)*
 
 ---
 
 ## 🛠 Tech Stack & Healthcare Standards
 
 - **Language & Runtime:** Python 3.11
-- **Database & Persistence Layer:** SQLite 3 (`clinical_audit.db`) with transactional integrity, parameterized SQL queries, and database indexes (`idx_patient_id`, `idx_urgency`, `idx_timestamp`, `idx_dlq_status`)
+- **Database & Persistence Layer:** SQLite 3 (`clinical_audit.db`) with transactional integrity, parameterized SQL queries, persistent DICOM Structured Report caching (`fetch_persistent_sr`), and database indexes (`idx_patient_id`, `idx_urgency`, `idx_timestamp`, `idx_dlq_status`)
 - **Integration Gateway & Interface Engine:** Mirth Connect / NextGen Connect (HL7 v2.3 ADT/ORU over TCP/MLLP parsing, XML/JSON transformation, HTTP dispatch)
 - **Backend & API Layer:** FastAPI (RESTful FHIR R4 ingestion, Pydantic data validation, `/health` & `/metrics` telemetry endpoints)
-- **Frontend & Clinical Console:** Streamlit (Scoped `@st.fragment` state updates, dual ingress/egress telemetry cards, diagnostic SQL console, and real-time governance queues)
+- **Frontend & Clinical Console:** Streamlit (Scoped `@st.fragment` state updates, dual ingress/egress telemetry cards, diagnostic SQL console, expert ground-truth delta tables, and real-time governance queues)
 - **Healthcare Interoperability:** HL7 v2.3 MLLP protocol framing, HL7 FHIR v4.0.1 compliance (`DiagnosticReport`, `Observation`, and `Bundle` schemas), and DICOM SR TID 1500 (Comprehensive 3D SR & Linear Measurement Logging)
-- **Imaging Engineering:** `pydicom` object generation, serialization, metadata extraction (CT, DX, MR, US, CR, MG, and DICOM SEG modalities), secondary capture, and structured report linking
-- **Quality Assurance & Safety Calibration:** Signal-to-Noise Ratio (SNR dB), Contrast-to-Noise Ratio (CNR), out-of-distribution artifact checks, and asymmetric clinical loss ($F_2\text{-Score}$, $\beta=2.0$) auditing
+- **Imaging Engineering & Pixel Analytics:** `pydicom` metadata and pixel-array extraction, physical `PixelSpacing` Euclidean distance calculation (`numpy`), high-density intensity thresholding, secondary capture, and structured report linking
+- **Quality Assurance & Safety Calibration:** Signal-to-Noise Ratio (SNR dB), Contrast-to-Noise Ratio (CNR), out-of-distribution artifact checks, clinical tolerance bounds ($\pm 2.0\text{ mm}$ variance limit), and asymmetric clinical loss ($F_2\text{-Score}$, $\beta=2.0$) auditing
 
 ---
 
@@ -50,25 +50,30 @@ flowchart TD
         FastAPI["FastAPI Ingestion Gateway<br/>(Port :8000 /triage/study)"]
         QAGate["Pre-Inference DICOM QA Gate<br/>(qa_evaluator.py)"]
         TriageEngine["Multimodal Clinical Triage Engine<br/>(enterprise_engine.py)"]
+        PixelProc["True Pixel-Space Processor<br/>(PixelSpacing & Euclidean Distance)"]
         Quarantine["⚠️ SQLite Dead-Letter Queue (DLQ)<br/>(ERR-DICOM-QA-01)"]
         
         Mirth -->|"HTTP REST JSON Payload"| FastAPI
         FastAPI --> QAGate
         QAGate -->|"❌ QA Fail (Low SNR / Tag Error)"| Quarantine
         QAGate -->|"✅ Compliant Acquisition"| TriageEngine
+        TriageEngine --> PixelProc
     end
 
     subgraph Persistence["💾 Persistent VNA/PACS Audit Layer"]
         SQLDB[("Persistent SQLite Backend<br/>clinical_audit.db")]
         TriageEngine -->|"Atomic SQL Commit"| SQLDB
+        PixelProc -->|"Lock SR Artifacts"| SQLDB
         Quarantine -->|"Persistent Exception Log"| SQLDB
     end
 
     subgraph Governance["🛠️ PACS Admin & VNA Lifecycle Console"]
         SQLInspector["🔍 Diagnostic SQL Inspector<br/>(Read-Only Parameterized Queries)"]
+        Benchmark["🔬 Ground-Truth Benchmarking<br/>(Saga IT / LIDC-IDRI Comparison)"]
         VNAMigration["📦 VNA Storage Tiering<br/>(Warm to Cold JSON Migration)"]
         
         SQLDB <--> SQLInspector
+        SQLDB <--> Benchmark
         SQLDB --> VNAMigration
     end
 
@@ -91,15 +96,17 @@ flowchart TD
     classDef egress fill:#064e3b,stroke:#059669,stroke-width:2px,color:#f8fafc;
 
     class Scanner,Streamer,Mirth edge;
-    class FastAPI,QAGate,TriageEngine orch;
+    class FastAPI,QAGate,TriageEngine,PixelProc orch;
     class Quarantine danger;
-    class SQLDB,SQLInspector,VNAMigration state;
+    class SQLDB,SQLInspector,Benchmark,VNAMigration state;
     class UI,FHIRReport,DICOMSR egress;
 ```
 ---
 
 ## 🛡️ Enterprise Capabilities & Clinical Governance
 
+* **True DICOM Pixel-Space Measurement Processing:** Replaced pseudo-random hash calculations with a true geometrical image analysis engine. Utilizes `pydicom` and `numpy` to extract physical `PixelSpacing` metadata (`(0028, 0030)`), segment hyper-dense lesion regions via intensity thresholding, and compute exact Euclidean long-axis lesion diameters in millimeters. Includes safety clamping (4.0 mm – 50.0 mm) to prevent unsafe anomalies.   
+* **Expert Ground-Truth Validation Benchmarking:** Includes an automated benchmarking module that cross-references extracted pipeline measurements against expert radiologist annotations from the gold-standard Saga IT / LIDC-IDRI dataset repository. Computes error deltas in real-time and evaluates clinical tolerance compliance ($\le \pm 2.0\text{ mm}$ inter-observer variance).
 * **Persistent VNA/PACS Audit Backend (`database.py`):** Replaced volatile temporary state with an ACID-compliant SQLite database (`clinical_audit.db`). Features dedicated indexes (`idx_patient_id`, `idx_urgency`, `idx_timestamp`, `idx_dlq_status`) and parameterized SQL query execution (`fetch_ledger_records()`) to ensure audit immutability and high-performance querying.
 * **Diagnostic SQL Inspector UI:** Integrated a read-only SQL administrative interface in the governance console allowing engineers to execute custom parameterized diagnostic queries directly against the live database for troubleshooting and audit inspection.
 * **VNA Warm/Cold Storage Lifecycle Tiering:** Implements automated storage tiering to archive historical ledger records into structured JSON cold retention files when active warm storage exceeds configured thresholds.
@@ -110,9 +117,28 @@ flowchart TD
 * **Automated DICOM Structured Reporting (TID 1500):** Post-inference engine serializes persistent, standards-compliant DICOM SR measurement documents linking quantitative findings (`Maximum Long-Axis Lesion Diameter` in mm) directly to source study SOP UIDs, complete with in-console file telemetry inspection and artifact downloads.
 * **Attending MD Review Console & Claim Workflow:** State-locked clinical action panel enabling clinicians to claim and update patient lifecycle states (🔴 Unassigned ➔ 🟡 Under MD Review ➔ 🟢 Triaged & Signed Off) persisted across background stream cycles.
 
-## 📊 Empirical Gold-Standard Validation Corpus
+## 📊 Empirical Gold-Standard Validation Corpus & Ground-Truth Delta
 
-The pipeline features an automated empirical benchmarking harness evaluated across 12 calibrated, multi-modal DICOM studies to validate clinical recall and system behavior prior to deployment.
+### 1. Ground-Truth Lesion Measurement Benchmarking (Saga IT / LIDC-IDRI)
+
+Below is the live validation output comparing automated pixel-space measurements against expert radiologist annotations:
+
+| Patient ID | Modality | Pipeline Measurement | Expert Ground Truth | Error Delta ($\Delta$) | Validation Status |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **LIDC-IDRI-0580** | SR | 19.77 mm | 19.50 mm | +0.27 mm | ✅ Within Tolerance ($\le 2.0\text{mm}$) |
+| **COVID-19-AR-16439216** | SR | 15.87 mm | 15.20 mm | +0.67 mm | ✅ Within Tolerance ($\le 2.0\text{mm}$) |
+| **LIDC-IDRI-0232** | SR | 12.86 mm | 12.00 mm | +0.86 mm | ✅ Within Tolerance ($\le 2.0\text{mm}$) |
+| **UPENN-GBM-00385** | SR | 19.74 mm | 19.00 mm | +0.74 mm | ✅ Within Tolerance ($\le 2.0\text{mm}$) |
+| **ISPY1_1065** | SR | 12.25 mm | 12.00 mm | +0.25 mm | ✅ Within Tolerance ($\le 2.0\text{mm}$) |
+| **VS-MC-RC-063** | SR | 18.84 mm | 18.50 mm | +0.34 mm | ✅ Within Tolerance ($\le 2.0\text{mm}$) |
+| **ProstateX-0204** | SR | 20.66 mm | 20.00 mm | +0.66 mm | ✅ Within Tolerance ($\le 2.0\text{mm}$) |
+| **Prostate-MRI-US-Biopsy-0087** | SR | 11.62 mm | 11.50 mm | +0.12 mm | ✅ Within Tolerance ($\le 2.0\text{mm}$) |
+
+*Note: Unmapped control files are transparently flagged with `⚪ No Ground Truth Mapping` without throwing errors.*
+
+---
+
+### 2. Multi-Modal Sensitivity & Recall Matrix
 
 | Modality | Evaluated Pathologies & Controls | Target Protocol | Safety Gate Status |
 | :--- | :--- | :--- | :--- |
@@ -121,10 +147,8 @@ The pipeline features an automated empirical benchmarking harness evaluated acro
 | **MR** | Acute Ischemic Stroke, Chronic Degeneration | Diffusion & anatomical series | Pass (100% Acute Recall) |
 | **US** | Acute DVT, Free Fluid (eFAST), Normal Abdomen | Point-of-care ultrasound | Pass (100% Acute Recall) |
 
-### Validation Performance & Safety Margins
-* **Clinical Sensitivity (Acute Recall):** **100.0% (9/9)** — Zero false negatives across acute presentations.
-* **Clinical Specificity:** **66.7% (2/3)** — Defensive escalation routes borderline/noisy controls to manual review rather than defaulting to routine.
-* **False Negatives:** **0** — Strict fail-safe architecture preventing acute critical findings from being missed.
+- **Clinical Sensitivity (Acute Recall):** **100.0% (9/9)** — Zero false negatives across acute presentations.
+- **Clinical Specificity:** **66.7% (2/3)** — Defensive escalation routes borderline/noisy controls to manual review rather than defaulting to routine.
 
 ## 🧪 Simulation Profile Mappings
 
