@@ -126,8 +126,10 @@ Below is the live validation output comparing automated pixel-space measurements
 | Patient ID | Modality | Pipeline Measurement | Expert Ground Truth | Error Delta ($\Delta$) | Validation Status |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **LIDC-IDRI-0580** | SR | 19.77 mm | 19.50 mm | +0.27 mm | ✅ Within Tolerance ($\le 2.0\text{mm}$) |
+| **112516** | SR | 10.70 mm | Unmapped ID | None | ⚪ No Ground Truth Mapping |
 | **COVID-19-AR-16439216** | SR | 15.87 mm | 15.20 mm | +0.67 mm | ✅ Within Tolerance ($\le 2.0\text{mm}$) |
 | **LIDC-IDRI-0232** | SR | 12.86 mm | 12.00 mm | +0.86 mm | ✅ Within Tolerance ($\le 2.0\text{mm}$) |
+| **AP-27ZN** | SR | 12.16 mm | Unmapped ID | None | ⚪ No Ground Truth Mapping |
 | **UPENN-GBM-00385** | SR | 19.74 mm | 19.00 mm | +0.74 mm | ✅ Within Tolerance ($\le 2.0\text{mm}$) |
 | **ISPY1_1065** | SR | 12.25 mm | 12.00 mm | +0.25 mm | ✅ Within Tolerance ($\le 2.0\text{mm}$) |
 | **VS-MC-RC-063** | SR | 18.84 mm | 18.50 mm | +0.34 mm | ✅ Within Tolerance ($\le 2.0\text{mm}$) |
